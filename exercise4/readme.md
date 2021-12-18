@@ -1,6 +1,6 @@
 ### Exercise 4
 
-![Blink](url)
+![LED blinking when pressing button](https://github.com/RobotGrrl/MakingEmbeddedSystems/blob/master/exercise4/blinking1.gif?raw=true)
 
 
 	GPIO_PinState val = HAL_GPIO_ReadPin(JOY_UP_GPIO_Port, JOY_UP_Pin);
