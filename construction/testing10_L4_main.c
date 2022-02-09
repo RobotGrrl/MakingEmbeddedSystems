@@ -62,6 +62,47 @@ static void MX_TIM8_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+// im too tired to have the protocol and function separetly
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  int num = -1;
+
+  // check which timer triggered this callback
+  if (htim == &htim3) {
+    num = 3;
+    // if it's the time of the output compare pulse
+    if(&htim3.Instance->CNT == &htim3.Instance->CCR4) {
+    	num = 3;
+    }
+  } else if(htim == &htim2) {
+	num = 2;
+  } else if(htim == &htim8) {
+	num = 8;
+  } else if(htim == &htim4) {
+	num = 4;
+  }
+
+  //printf("tick tock  %d", num); // lel
+}
+
+void HAL_TIM_TriggerCallback(TIM_HandleTypeDef *htim) {
+	int num = -1;
+
+	  // check which timer triggered this callback
+	  if (htim == &htim3) {
+		num = 3; // should not be reached, 3 is master
+	  } else if(htim == &htim2) {
+		num = 2;
+	  } else if(htim == &htim8) {
+		num = 8;
+	  } else if(htim == &htim4) {
+		num = 4;
+	  }
+
+	  //printf("zap %d", num); // lel
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -97,6 +138,35 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM8_Init();
   /* USER CODE BEGIN 2 */
+
+  // is this needed?
+//  HAL_TIM_Base_Start(&htim3);
+//  HAL_TIM_Base_Start(&htim2);
+//  HAL_TIM_Base_Start(&htim8);
+//  HAL_TIM_Base_Start(&htim4);
+
+  HAL_TIM_Base_Start_IT(&htim3);
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_Base_Start_IT(&htim8);
+  HAL_TIM_Base_Start_IT(&htim4);
+
+  __HAL_TIM_ENABLE_IT(&htim3, TIM_IT_TRIGGER ); // there's also TIM_IT_TRIGGER, TIM_IT_UPDATE
+  __HAL_TIM_ENABLE_IT(&htim2, TIM_IT_TRIGGER );
+  __HAL_TIM_ENABLE_IT(&htim8, TIM_IT_TRIGGER );
+  __HAL_TIM_ENABLE_IT(&htim4, TIM_IT_TRIGGER );
+
+  // blocking
+//  HAL_TIM_OC_Start(&htim3, TIM_CHANNEL_2);
+//  HAL_TIM_OC_Start(&htim2, TIM_CHANNEL_1);
+//  HAL_TIM_OC_Start(&htim8, TIM_CHANNEL_2);
+//  HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_4);
+
+  // non-blocking
+  HAL_TIM_OC_Start_IT(&htim3, TIM_CHANNEL_2);
+  HAL_TIM_OC_Start_IT(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_OC_Start_IT(&htim8, TIM_CHANNEL_2);
+  HAL_TIM_OC_Start_IT(&htim4, TIM_CHANNEL_4);
+
 
   /* USER CODE END 2 */
 
@@ -204,8 +274,8 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_ACTIVE;
-  sConfigOC.Pulse = 3000;
+  sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
+  sConfigOC.Pulse = 6000;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -263,8 +333,8 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_ACTIVE;
-  sConfigOC.Pulse = 3000;
+  sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
+  sConfigOC.Pulse = 6000;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
@@ -323,8 +393,8 @@ static void MX_TIM4_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_ACTIVE;
-  sConfigOC.Pulse = 3000;
+  sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
+  sConfigOC.Pulse = 6000;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_OC_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
@@ -386,12 +456,12 @@ static void MX_TIM8_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_ACTIVE;
-  sConfigOC.Pulse = 3000;
+  sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
+  sConfigOC.Pulse = 6000;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_SET;
   sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
   if (HAL_TIM_OC_ConfigChannel(&htim8, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
