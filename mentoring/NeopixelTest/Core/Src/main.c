@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "stm32_hal_neopixel.h"
+//#include "stm32_hal_neopixel.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,6 +57,111 @@ uint32_t hsl_to_rgb(uint8_t h, uint8_t s, uint8_t l);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+
+#define MAX_LED 24
+#define USE_BRIGHTNESS 0
+
+#define PWM_HI (56) // 64% of our cyle time
+#define PWM_LO (28) // 32% of our cycle time which is 89
+uint8_t LED_Data[MAX_LED][4];
+uint8_t LED_Mod[MAX_LED][4];  // for brightness
+
+int datasentflag=0;
+
+void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
+{
+	HAL_TIM_PWM_Stop_DMA(&htim2, TIM_CHANNEL_1);
+	datasentflag=1;
+}
+
+void Set_LED (int LEDnum, int Red, int Green, int Blue)
+{
+	LED_Data[LEDnum][0] = LEDnum;
+	LED_Data[LEDnum][1] = Green;
+	LED_Data[LEDnum][2] = Red;
+	LED_Data[LEDnum][3] = Blue;
+}
+
+#define PI 3.14159265
+
+void Set_Brightness (int brightness)  // 0-45
+{
+#if USE_BRIGHTNESS
+
+	if (brightness > 45) brightness = 45;
+	for (int i=0; i<MAX_LED; i++)
+	{
+		LED_Mod[i][0] = LED_Data[i][0];
+		for (int j=1; j<4; j++)
+		{
+			float angle = 90-brightness;  // in degrees
+			angle = angle*PI / 180;  // in rad
+			LED_Mod[i][j] = (LED_Data[i][j])/(tan(angle));
+		}
+	}
+
+#endif
+
+}
+
+uint16_t pwmData[(24*MAX_LED)+50];
+
+void WS2812_Send (void)
+{
+	uint32_t indx=0;
+	uint32_t color;
+
+
+	for (int i= 0; i<MAX_LED; i++)
+	{
+#if USE_BRIGHTNESS
+		color = ((LED_Mod[i][1]<<16) | (LED_Mod[i][2]<<8) | (LED_Mod[i][3]));
+#else
+		color = ((LED_Data[i][1]<<16) | (LED_Data[i][2]<<8) | (LED_Data[i][3]));
+#endif
+
+		for (int j=23; j>=0; j--)// There are 24 bits per Colour Channel.
+		{
+			if (color&(1<<j))// if the bit is a 1 then we want to send a high for 2/3rds of the time ( the high duty cycle 0.4/0.4+ 0.84 = 0.32 , close enough
+			{
+				pwmData[indx] = PWM_HI;  // 2/3 of 90 WS2812B HiGH High (1) at 62% duty (0.8µs).
+			//
+			}
+			else // duty cycle for low
+			{
+				pwmData[indx] = PWM_LO;  // 1/3 of 90WS2812B LOW Low (0) at 32% duty (0.4µs).
+			}
+
+			indx++;
+		}
+
+	}
+
+	for (int i=0; i<50; i++)
+	{
+		pwmData[indx] = 0;
+		indx++;
+	}
+
+	HAL_TIM_PWM_Start_DMA(&htim2, TIM_CHANNEL_1, (uint32_t *)pwmData, indx);
+	while (!datasentflag){
+
+	};
+	datasentflag = 0;
+}
+
+void Reset_LED (void)
+{
+	for (int i=0; i<MAX_LED; i++)
+	{
+		LED_Data[i][0] = i;
+		LED_Data[i][1] = 0;
+		LED_Data[i][2] = 0;
+		LED_Data[i][3] = 0;
+	}
+}
+
 
 /* USER CODE END 0 */
 
@@ -96,25 +201,20 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint8_t angle = 0;
-  const uint8_t angle_difference = 11;
+  for(int i = 0; i < MAX_LED; i++)
+  {
+  	// setting all LEDS to be green
+  	Set_LED(0, 0, 255, 0);
+  }
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
 
-  	for(uint8_t i = 0; i < 8 /* Change that to your amount of LEDs */; i++) {
-			// Calculate color
-			uint32_t rgb_color = hsl_to_rgb(angle + (i * angle_difference), 255, 127);
-			// Set color
-			led_set_RGB(i, (rgb_color >> 16) & 0xFF, (rgb_color >> 8) & 0xFF, rgb_color & 0xFF);
-		}
-		// Write to LED
-		++angle;
-		led_render();
-
-		HAL_Delay(1000);
+  	WS2812_Send();
+		HAL_Delay (50);
 
 		// Some delay*/
 		//ConsoleProcess();
@@ -156,7 +256,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 64;
+  RCC_OscInitStruct.PLL.PLLN = 72;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 8;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -169,11 +269,11 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV4;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -217,10 +317,6 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_OC_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
@@ -232,11 +328,6 @@ static void MX_TIM2_Init(void)
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
-  if (HAL_TIM_OC_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
