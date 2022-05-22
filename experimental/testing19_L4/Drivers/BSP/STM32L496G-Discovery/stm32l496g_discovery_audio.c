@@ -1564,125 +1564,125 @@ static uint8_t AUDIO_SAIx_DeInit(void)
   * @param  hsai : pointer to a SAI_HandleTypeDef structure
   * @retval None
   */
-//void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai)
-//{
-//  GPIO_InitTypeDef  GPIO_InitStruct;
-//
-//  /* Enable SAI clock */
-//  __HAL_RCC_SAI1_CLK_ENABLE();
-//
-//  if (hsai->Instance == SAI1_Block_A)
-//  {
-//    /* SAI pins configuration: FS, SCK, MCLK and SD pins */
-//    __HAL_RCC_GPIOB_CLK_ENABLE();
-//    __HAL_RCC_GPIOE_CLK_ENABLE();
-//    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-//    GPIO_InitStruct.Pull      = GPIO_NOPULL;
-//    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-//    GPIO_InitStruct.Alternate = GPIO_AF13_SAI1;
-//    GPIO_InitStruct.Pin       = GPIO_PIN_2;
-//    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct); /* SAI1_MCLK_A */
-//    GPIO_InitStruct.Pin       = GPIO_PIN_4;
-//    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct); /* SAI1_FS_A */
-//    GPIO_InitStruct.Pin       = GPIO_PIN_10;
-//    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct); /* SAI1_SCK_A */
-//    GPIO_InitStruct.Pin       = GPIO_PIN_6;
-//    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct); /* SAI1_SD_A */
-//
-//    /* Configure the hDmaSaiTx handle parameters */
-//    __HAL_RCC_DMA2_CLK_ENABLE();
-//    hDmaSaiTx.Init.Request             = DMA_REQUEST_1;
-//    hDmaSaiTx.Init.Direction           = DMA_MEMORY_TO_PERIPH;
-//    hDmaSaiTx.Init.PeriphInc           = DMA_PINC_DISABLE;
-//    hDmaSaiTx.Init.MemInc              = DMA_MINC_ENABLE;
-//    hDmaSaiTx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-//    hDmaSaiTx.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;
-//    hDmaSaiTx.Init.Mode                = DMA_CIRCULAR;
-//    hDmaSaiTx.Init.Priority            = DMA_PRIORITY_HIGH;
-//    hDmaSaiTx.Instance                 = DMA2_Channel1;
-//    /* Associate the DMA handle */
-//    __HAL_LINKDMA(hsai, hdmatx, hDmaSaiTx);
-//    /* Deinitialize the Stream for new transfer */
-//    HAL_DMA_DeInit(&hDmaSaiTx);
-//    /* Configure the DMA Stream */
-//    HAL_DMA_Init(&hDmaSaiTx);
-//    /* SAI DMA IRQ Channel configuration */
-//    HAL_NVIC_SetPriority(DMA2_Channel1_IRQn, 5, 0);
-//    HAL_NVIC_EnableIRQ(DMA2_Channel1_IRQn);
-//  }
-//  else /* SAI1_BlockB */
-//  {
-//    /* SAI pins configuration: SD pin */
-//    __HAL_RCC_GPIOE_CLK_ENABLE();
-//    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-//    GPIO_InitStruct.Pull      = GPIO_NOPULL;
-//    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-//    GPIO_InitStruct.Alternate = GPIO_AF13_SAI1;
-//    GPIO_InitStruct.Pin       = GPIO_PIN_3;
-//    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct); /* SAI1_SD_B */
-//
-//    /* Configure the hDmaSaiRx handle parameters */
-//    __HAL_RCC_DMA2_CLK_ENABLE();
-//    hDmaSaiRx.Init.Request             = DMA_REQUEST_1;
-//    hDmaSaiRx.Init.Direction           = DMA_PERIPH_TO_MEMORY;
-//    hDmaSaiRx.Init.PeriphInc           = DMA_PINC_DISABLE;
-//    hDmaSaiRx.Init.MemInc              = DMA_MINC_ENABLE;
-//    hDmaSaiRx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-//    hDmaSaiRx.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;
-//    hDmaSaiRx.Init.Mode                = DMA_CIRCULAR;
-//    hDmaSaiRx.Init.Priority            = DMA_PRIORITY_HIGH;
-//    hDmaSaiRx.Instance                 = DMA2_Channel2;
-//    /* Associate the DMA handle */
-//    __HAL_LINKDMA(hsai, hdmarx, hDmaSaiRx);
-//    /* Deinitialize the Stream for new transfer */
-//    HAL_DMA_DeInit(&hDmaSaiRx);
-//    /* Configure the DMA Stream */
-//    HAL_DMA_Init(&hDmaSaiRx);
-//    /* SAI DMA IRQ Channel configuration */
-//    HAL_NVIC_SetPriority(DMA2_Channel2_IRQn, 5, 0);
-//    HAL_NVIC_EnableIRQ(DMA2_Channel2_IRQn);
-//  }
-//}
+void HAL_SAI_MspInit(SAI_HandleTypeDef *hsai)
+{
+  GPIO_InitTypeDef  GPIO_InitStruct;
+
+  /* Enable SAI clock */
+  __HAL_RCC_SAI1_CLK_ENABLE();
+
+  if (hsai->Instance == SAI1_Block_A)
+  {
+    /* SAI pins configuration: FS, SCK, MCLK and SD pins */
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull      = GPIO_NOPULL;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF13_SAI1;
+    GPIO_InitStruct.Pin       = GPIO_PIN_2;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct); /* SAI1_MCLK_A */
+    GPIO_InitStruct.Pin       = GPIO_PIN_4;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct); /* SAI1_FS_A */
+    GPIO_InitStruct.Pin       = GPIO_PIN_10;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct); /* SAI1_SCK_A */
+    GPIO_InitStruct.Pin       = GPIO_PIN_6;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct); /* SAI1_SD_A */
+
+    /* Configure the hDmaSaiTx handle parameters */
+    __HAL_RCC_DMA2_CLK_ENABLE();
+    hDmaSaiTx.Init.Request             = DMA_REQUEST_1;
+    hDmaSaiTx.Init.Direction           = DMA_MEMORY_TO_PERIPH;
+    hDmaSaiTx.Init.PeriphInc           = DMA_PINC_DISABLE;
+    hDmaSaiTx.Init.MemInc              = DMA_MINC_ENABLE;
+    hDmaSaiTx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+    hDmaSaiTx.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;
+    hDmaSaiTx.Init.Mode                = DMA_CIRCULAR;
+    hDmaSaiTx.Init.Priority            = DMA_PRIORITY_HIGH;
+    hDmaSaiTx.Instance                 = DMA2_Channel1;
+    /* Associate the DMA handle */
+    __HAL_LINKDMA(hsai, hdmatx, hDmaSaiTx);
+    /* Deinitialize the Stream for new transfer */
+    HAL_DMA_DeInit(&hDmaSaiTx);
+    /* Configure the DMA Stream */
+    HAL_DMA_Init(&hDmaSaiTx);
+    /* SAI DMA IRQ Channel configuration */
+    HAL_NVIC_SetPriority(DMA2_Channel1_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(DMA2_Channel1_IRQn);
+  }
+  else /* SAI1_BlockB */
+  {
+    /* SAI pins configuration: SD pin */
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull      = GPIO_NOPULL;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF13_SAI1;
+    GPIO_InitStruct.Pin       = GPIO_PIN_3;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct); /* SAI1_SD_B */
+
+    /* Configure the hDmaSaiRx handle parameters */
+    __HAL_RCC_DMA2_CLK_ENABLE();
+    hDmaSaiRx.Init.Request             = DMA_REQUEST_1;
+    hDmaSaiRx.Init.Direction           = DMA_PERIPH_TO_MEMORY;
+    hDmaSaiRx.Init.PeriphInc           = DMA_PINC_DISABLE;
+    hDmaSaiRx.Init.MemInc              = DMA_MINC_ENABLE;
+    hDmaSaiRx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+    hDmaSaiRx.Init.MemDataAlignment    = DMA_MDATAALIGN_HALFWORD;
+    hDmaSaiRx.Init.Mode                = DMA_CIRCULAR;
+    hDmaSaiRx.Init.Priority            = DMA_PRIORITY_HIGH;
+    hDmaSaiRx.Instance                 = DMA2_Channel2;
+    /* Associate the DMA handle */
+    __HAL_LINKDMA(hsai, hdmarx, hDmaSaiRx);
+    /* Deinitialize the Stream for new transfer */
+    HAL_DMA_DeInit(&hDmaSaiRx);
+    /* Configure the DMA Stream */
+    HAL_DMA_Init(&hDmaSaiRx);
+    /* SAI DMA IRQ Channel configuration */
+    HAL_NVIC_SetPriority(DMA2_Channel2_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(DMA2_Channel2_IRQn);
+  }
+}
 
 /**
   * @brief  SAI MSP De-init
   * @param  hsai : pointer to a SAI_HandleTypeDef structure
   * @retval None
   */
-//void HAL_SAI_MspDeInit(SAI_HandleTypeDef *hsai)
-//{
-//  if (hsai->Instance == SAI1_Block_A)
-//  {
-//    /* Disable SAI DMA Channel IRQ  */
-//    HAL_NVIC_DisableIRQ(DMA2_Channel1_IRQn);
-//
-//    /* Reset the DMA Stream configuration*/
-//    HAL_DMA_DeInit(&hDmaSaiTx);
-//
-//    /* De-initialize FS, SCK, MCK and SD pins*/
-//    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_2);  /* SAI1_MCLK_A */
-//    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_4);  /* SAI1_FS_A */
-//    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_10); /* SAI1_SCK_A */
-//    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_6);  /* SAI1_SD_A */
-//
-//    /* Don't disable SAI clock used for other SAI block */
-//    /*__HAL_RCC_SAI1_CLK_DISABLE(); */
-//  }
-//  else /* SAI1_BlockB */
-//  {
-//    /* Disable SAI DMA Channel IRQ  */
-//    HAL_NVIC_DisableIRQ(DMA2_Channel2_IRQn);
-//
-//    /* Reset the DMA Stream configuration*/
-//    HAL_DMA_DeInit(&hDmaSaiRx);
-//
-//    /* De-initialize SD pin */
-//    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_3);  /* SAI1_SD_B */
-//
-//    /* Disable SAI clock */
-//    __HAL_RCC_SAI1_CLK_DISABLE();
-//  }
-//}
+void HAL_SAI_MspDeInit(SAI_HandleTypeDef *hsai)
+{
+  if (hsai->Instance == SAI1_Block_A)
+  {
+    /* Disable SAI DMA Channel IRQ  */
+    HAL_NVIC_DisableIRQ(DMA2_Channel1_IRQn);
+
+    /* Reset the DMA Stream configuration*/
+    HAL_DMA_DeInit(&hDmaSaiTx);
+
+    /* De-initialize FS, SCK, MCK and SD pins*/
+    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_2);  /* SAI1_MCLK_A */
+    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_4);  /* SAI1_FS_A */
+    HAL_GPIO_DeInit(GPIOB, GPIO_PIN_10); /* SAI1_SCK_A */
+    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_6);  /* SAI1_SD_A */
+
+    /* Don't disable SAI clock used for other SAI block */
+    /*__HAL_RCC_SAI1_CLK_DISABLE(); */
+  }
+  else /* SAI1_BlockB */
+  {
+    /* Disable SAI DMA Channel IRQ  */
+    HAL_NVIC_DisableIRQ(DMA2_Channel2_IRQn);
+
+    /* Reset the DMA Stream configuration*/
+    HAL_DMA_DeInit(&hDmaSaiRx);
+
+    /* De-initialize SD pin */
+    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_3);  /* SAI1_SD_B */
+
+    /* Disable SAI clock */
+    __HAL_RCC_SAI1_CLK_DISABLE();
+  }
+}
 
 /**
   * @}

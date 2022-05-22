@@ -112,6 +112,96 @@ Point prev;
 Point new;
 TS_StateTypeDef ts_result;
 bool flip = false;
+
+
+
+
+
+
+
+
+
+
+
+// https://github.com/jimingkang/STM32L476_BSP/blob/adab06422cf7ba70f1c87331dc8aa8e33298ceec/Src/audio_play.c
+
+/**
+* @brief  Callback invoked the DMA transfer of te audio samples towards the
+*         audio codec is completed.
+* @param  None
+* @retval None
+* @note This callback function has been registered during the audio playback
+*       setup phase by calling the BSP_AUDIO_OUT_RegisterCallbacks function.
+*/
+void AudioPlay_TransferComplete_CallBack()
+{
+
+
+//  uint32_t replay = 0;
+//
+//  if (AudioDemo == AUDIO_DEMO_PLAYBACK)
+//  {
+//    /* Toggle on green LED: playback is going-on */
+//    BSP_LED_Toggle(LED5);
+//
+//    /* Update the current pointer position */
+//    pAudioSample += DMA_MAX(RemainingAudioSamplesNb);
+//
+//    /* Update the remaining number of data to be played */
+//    RemainingAudioSamplesNb = (AUDIO_END_ADDRESS - (uint32_t)pAudioSample)/2;
+//
+//    if (RemainingAudioSamplesNb > 0)
+//    {
+//      /* Replay from the current position */
+//      if (BSP_AUDIO_OUT_ChangeBuffer(pAudioSample,
+//                                     DMA_MAX(RemainingAudioSamplesNb)) != 0)
+//      {
+//        Error_Handler();
+//      }
+//    }
+//    else
+//    {
+//      /* Request to replay audio file from beginning */
+//      replay = 1;
+//    }
+//
+//    /* Audio sample used for play*/
+//    if (replay == 1)
+//    {
+//      /* Set the remaining number of data to be played */
+//      RemainingAudioSamplesNb = (uint32_t)(AUDIO_FILE_SIZE / AUDIODATA_SIZE);
+//
+//      /* Set the pointer to the first audio sample to play */
+//      pAudioSample = (uint16_t*)AUDIO_START_ADDRESS;
+//
+//      /* Replay from the beginning */
+//      if (BSP_AUDIO_OUT_Play((uint16_t*)pAudioSample,
+//                             RemainingAudioSamplesNb) != AUDIO_OK)
+//      {
+//        Error_Handler();
+//      }
+//    }
+//  }
+
+
+}
+
+/**
+* @brief  Callback invoked the DMA transfer of te audio samples towards the
+*         audio codec has failed.
+* @param  None
+* @retval None
+* @note This callback function has been registered during the audio playback
+*       setup phase by calling the BSP_AUDIO_OUT_RegisterCallbacks function.
+*/
+void AudioPlay_Error_CallBack(void)
+{
+  /* Stop the program with an infinite loop */
+  Error_Handler();
+}
+
+
+
 /* USER CODE END 0 */
 
 /**
@@ -187,13 +277,32 @@ int main(void)
 
 
 	// audio init
+
+	// should this go here? or after audio init?
+	HAL_SAI_MspInit( &BSP_AUDIO_hSai_Tx );
+
 	// "The WAV audio format was developed by Microsoft and
 	// has become one of the primary formats of uncompressed audio.
 	// It stores audio at about 10 MB per minute at a 44.1 kHz
 	// sample rate using stereo 16-bit samples." // 44.1 kHz
-	if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 80, 44100) == AUDIO_ERROR ) {
+	// how do we know the audio frequency is correct?
+	if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, DEFAULT_VOLMAX, AUDIO_FREQUENCY_44K) == AUDIO_ERROR ) {
 		Error_Handler();
 	}
+
+	BSP_AUDIO_OUT_ChangeAudioConfig(BSP_AUDIO_OUT_NORMALMODE);//BSP_AUDIO_OUT_MONOMODE);
+
+	if(BSP_AUDIO_OUT_SetOutputMode(OUTPUT_DEVICE_HEADPHONE) != AUDIO_OK) {
+		Error_Handler();
+	}
+
+//	if(BSP_AUDIO_OUT_SetFrequency(  ) != AUDIO_OK) {
+//		Error_Handler();
+//	}
+
+	BSP_AUDIO_OUT_RegisterCallbacks(AudioPlay_Error_CallBack,
+	                                    NULL,
+	                                    AudioPlay_TransferComplete_CallBack);
 
 
   /* USER CODE END 2 */
@@ -223,7 +332,7 @@ int main(void)
 
 			flip = !flip;
 			if(flip) {
-				if( BSP_AUDIO_OUT_Play( (uint16_t *)wav , 100) == AUDIO_ERROR) {
+				if( BSP_AUDIO_OUT_Play( (uint16_t *)wav , 10) == AUDIO_ERROR) {
 					printf("AUDIO_ERROR");
 				}
 			} else {
@@ -368,7 +477,7 @@ void PeriphCommonClock_Config(void)
   PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_MSI;
   PeriphClkInit.PLLSAI1.PLLSAI1M = 1;
   PeriphClkInit.PLLSAI1.PLLSAI1N = 24;
-  PeriphClkInit.PLLSAI1.PLLSAI1P = RCC_PLLP_DIV2;
+  PeriphClkInit.PLLSAI1.PLLSAI1P = RCC_PLLP_DIV12;
   PeriphClkInit.PLLSAI1.PLLSAI1Q = RCC_PLLQ_DIV2;
   PeriphClkInit.PLLSAI1.PLLSAI1R = RCC_PLLR_DIV2;
   PeriphClkInit.PLLSAI1.PLLSAI1ClockOut = RCC_PLLSAI1_SAI1CLK|RCC_PLLSAI1_48M2CLK
