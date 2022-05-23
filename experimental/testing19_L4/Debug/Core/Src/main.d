@@ -48,6 +48,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../USB_DEVICE/App/usb_device.h \
  ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h \
  ../USB_DEVICE/Target/usbd_conf.h ../Core/Inc/audio_buf.h \
+ ../Core/Inc/quack.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/../../../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/../../../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_lcd.h \
  ../Drivers/STM32L4xx_HAL_Driver/Inc/../../../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery.h \
@@ -117,6 +118,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Middlewares/ST/STM32_USB_Device_Library/Core/Inc/usbd_def.h:
 ../USB_DEVICE/Target/usbd_conf.h:
 ../Core/Inc/audio_buf.h:
+../Core/Inc/quack.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/../../../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/../../../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_lcd.h:
 ../Drivers/STM32L4xx_HAL_Driver/Inc/../../../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery.h:

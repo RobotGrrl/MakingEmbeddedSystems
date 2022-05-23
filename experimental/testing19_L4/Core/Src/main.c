@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include <stdbool.h>
 #include "audio_buf.h"
+#include "quack.h"
 //#define INIT_BLACK_LCD
 
 #include "../../../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery.h"
@@ -307,13 +308,30 @@ int main(void)
 	// It stores audio at about 10 MB per minute at a 44.1 kHz
 	// sample rate using stereo 16-bit samples." // 44.1 kHz
 	// how do we know the audio frequency is correct?
+
+	/*
+	 *
+	 * #define AUDIO_FREQUENCY_192K          ((uint32_t)192000)
+#define AUDIO_FREQUENCY_96K           ((uint32_t)96000)
+#define AUDIO_FREQUENCY_48K           ((uint32_t)48000)
+#define AUDIO_FREQUENCY_44K           ((uint32_t)44100)
+#define AUDIO_FREQUENCY_32K           ((uint32_t)32000)
+#define AUDIO_FREQUENCY_22K           ((uint32_t)22050)
+#define AUDIO_FREQUENCY_16K           ((uint32_t)16000)
+#define AUDIO_FREQUENCY_11K           ((uint32_t)11025)
+#define AUDIO_FREQUENCY_8K            ((uint32_t)8000)
+	 *
+	 */
+
+
+	//if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 80, (uint32_t)8000) == AUDIO_ERROR ) {
+	//if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 80, AUDIO_FREQUENCY_44K) == AUDIO_ERROR ) {
 	if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 80, AUDIO_FREQUENCY_44K) == AUDIO_ERROR ) {
-	//if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 100, AUDIO_FREQUENCY_44K) == AUDIO_ERROR ) {
 	//if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, DEFAULT_VOLMAX, AUDIO_FREQUENCY_44K) == AUDIO_ERROR ) {
 		Error_Handler();
 	}
 
-	BSP_AUDIO_OUT_ChangeAudioConfig(BSP_AUDIO_OUT_NORMALMODE);//BSP_AUDIO_OUT_MONOMODE);
+	BSP_AUDIO_OUT_ChangeAudioConfig(BSP_AUDIO_OUT_MONOMODE);//BSP_AUDIO_OUT_NORMALMODE);//BSP_AUDIO_OUT_MONOMODE);
 
 	if(BSP_AUDIO_OUT_SetOutputMode(OUTPUT_DEVICE_HEADPHONE) != AUDIO_OK) {
 		Error_Handler();
@@ -359,6 +377,8 @@ int main(void)
 				if( BSP_AUDIO_OUT_SetMute(AUDIO_MUTE_OFF) == AUDIO_ERROR ) {
 					int a2 = 0;
 				}
+
+				//if( BSP_AUDIO_OUT_Play( (uint16_t*)quack_wav , quack_wav_len) == AUDIO_ERROR) {
 
 				if( BSP_AUDIO_OUT_Play( (uint16_t*)wav , sizeof(wav)) == AUDIO_ERROR) {
 				//if( BSP_AUDIO_OUT_Play( (uint16_t*)wav , 6) == AUDIO_ERROR) { // ? this one?

@@ -273,7 +273,7 @@ uint32_t cs42l51_Play(uint16_t DeviceAddr, uint16_t* pBuffer, uint16_t Size)
   if(Is_CS42L51_Stop == 1)
   {
     /* Unmute output device */  
-    //counter += cs42l51_SetMute(DeviceAddr, AUDIO_MUTE_OFF);
+    counter += cs42l51_SetMute(DeviceAddr, AUDIO_MUTE_OFF);
 
     if(CS42L51_Device & OUTPUT_DEVICE_HEADPHONE)
     {
