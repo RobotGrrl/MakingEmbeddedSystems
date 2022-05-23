@@ -136,6 +136,7 @@ bool flip = false;
 void AudioPlay_TransferComplete_CallBack()
 {
 
+	int a = 0;
 
 //  uint32_t replay = 0;
 //
@@ -196,9 +197,19 @@ void AudioPlay_TransferComplete_CallBack()
 */
 void AudioPlay_Error_CallBack(void)
 {
-  /* Stop the program with an infinite loop */
-  Error_Handler();
+
+	int a = 0;
+
+	/* Stop the program with an infinite loop */
+  //Error_Handler();
 }
+
+
+
+void IDontKnow_CallBack(void) {
+	int a = 0;
+}
+
 
 
 
@@ -281,12 +292,24 @@ int main(void)
 	// should this go here? or after audio init?
 	HAL_SAI_MspInit( &BSP_AUDIO_hSai_Tx );
 
+
+// that's for input only
+//	// does this go here?
+//	HAL_DFSDM_ChannelMspInit( &BSP_AUDIO_hDfsdmLeftFilter );
+//	HAL_DFSDM_ChannelMspInit( &BSP_AUDIO_hDfsdmRightFilter );
+//
+//	// do both of these go?
+//	HAL_DFSDM_FilterMspInit( &BSP_AUDIO_hDfsdmLeftFilter );
+//	HAL_DFSDM_FilterMspInit( &BSP_AUDIO_hDfsdmRightFilter );
+
 	// "The WAV audio format was developed by Microsoft and
 	// has become one of the primary formats of uncompressed audio.
 	// It stores audio at about 10 MB per minute at a 44.1 kHz
 	// sample rate using stereo 16-bit samples." // 44.1 kHz
 	// how do we know the audio frequency is correct?
-	if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, DEFAULT_VOLMAX, AUDIO_FREQUENCY_44K) == AUDIO_ERROR ) {
+	if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 80, AUDIO_FREQUENCY_44K) == AUDIO_ERROR ) {
+	//if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, 100, AUDIO_FREQUENCY_44K) == AUDIO_ERROR ) {
+	//if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_HEADPHONE, DEFAULT_VOLMAX, AUDIO_FREQUENCY_44K) == AUDIO_ERROR ) {
 		Error_Handler();
 	}
 
@@ -301,8 +324,8 @@ int main(void)
 //	}
 
 	BSP_AUDIO_OUT_RegisterCallbacks(AudioPlay_Error_CallBack,
-	                                    NULL,
-	                                    AudioPlay_TransferComplete_CallBack);
+																	IDontKnow_CallBack,
+	                                AudioPlay_TransferComplete_CallBack);
 
 
   /* USER CODE END 2 */
@@ -332,11 +355,20 @@ int main(void)
 
 			flip = !flip;
 			if(flip) {
-				if( BSP_AUDIO_OUT_Play( (uint16_t *)wav , 10) == AUDIO_ERROR) {
+
+				if( BSP_AUDIO_OUT_SetMute(AUDIO_MUTE_OFF) == AUDIO_ERROR ) {
+					int a2 = 0;
+				}
+
+				if( BSP_AUDIO_OUT_Play( (uint16_t*)wav , sizeof(wav)) == AUDIO_ERROR) {
+				//if( BSP_AUDIO_OUT_Play( (uint16_t*)wav , 6) == AUDIO_ERROR) { // ? this one?
+				//if( BSP_AUDIO_OUT_Play( (uint16_t*)wav[0] , 10) == AUDIO_ERROR) { // infinite loop
+				//if( BSP_AUDIO_OUT_Play( (uint16_t*)&wav[0] , 10) == AUDIO_ERROR) { // infinite loop
+					int a1 = 0;
 					printf("AUDIO_ERROR");
 				}
 			} else {
-				BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
+				//BSP_AUDIO_OUT_Stop(CODEC_PDWN_SW);
 			}
 
 			xpos = 0;

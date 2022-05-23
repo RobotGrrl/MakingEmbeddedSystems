@@ -408,17 +408,28 @@ uint8_t BSP_AUDIO_OUT_DeInit(void)
   */
 uint8_t BSP_AUDIO_OUT_Play(uint16_t *pData, uint32_t Size)
 {
-  /* Initiate a DMA transfer of PCM samples towards the serial audio interface */
-  if (HAL_SAI_Transmit_DMA(&BSP_AUDIO_hSai_Tx, (uint8_t *)pData, DMA_MAX(Size)) != HAL_OK)
-  {
-    return AUDIO_ERROR;
-  }
+
+//	/* Initiate a DMA transfer of PCM samples towards the serial audio interface */
+//  if (HAL_SAI_Transmit_DMA(&BSP_AUDIO_hSai_Tx, (uint8_t *)pData, DMA_MAX(Size)) != HAL_OK)
+//  {
+//    return AUDIO_ERROR;
+//  }
+
+	// EK_edits
+	if (HAL_SAI_Transmit(&BSP_AUDIO_hSai_Tx, (uint8_t *)pData, Size, 5000) != HAL_OK)
+	{
+		return AUDIO_ERROR;
+	}
+
+	int a = 0;
 
   /* Call the audio Codec Play function */
   if (hAudioOut.AudioDrv->Play(AUDIO_I2C_ADDRESS, pData, Size) != 0)
   {
     return AUDIO_ERROR;
   }
+
+  a = 1;
 
   return AUDIO_OK;
 }

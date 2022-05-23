@@ -74,7 +74,7 @@ AUDIO_DrvTypeDef cs42l51_drv =
   */
 /* Uncomment this line to enable verifying data sent to codec after each write 
    operation (for debug purpose) */
-#if !defined (VERIFY_WRITTENDATA)  
+#if !defined (VERIFY_WRITTENDATA)
 #define VERIFY_WRITTENDATA
 #endif /* VERIFY_WRITTENDATA */
 /**
@@ -273,7 +273,7 @@ uint32_t cs42l51_Play(uint16_t DeviceAddr, uint16_t* pBuffer, uint16_t Size)
   if(Is_CS42L51_Stop == 1)
   {
     /* Unmute output device */  
-    counter += cs42l51_SetMute(DeviceAddr, AUDIO_MUTE_OFF);
+    //counter += cs42l51_SetMute(DeviceAddr, AUDIO_MUTE_OFF);
 
     if(CS42L51_Device & OUTPUT_DEVICE_HEADPHONE)
     {
@@ -476,7 +476,7 @@ static uint8_t CODEC_IO_Write(uint8_t Addr, uint8_t Reg, uint8_t Value)
   uint32_t result = 0;
   
   AUDIO_IO_Write(Addr, Reg, Value);
-  
+
 #ifdef VERIFY_WRITTENDATA
   /* Verify that the data has been correctly written */  
   result = (AUDIO_IO_Read(Addr, Reg) == Value)? 0:1;
