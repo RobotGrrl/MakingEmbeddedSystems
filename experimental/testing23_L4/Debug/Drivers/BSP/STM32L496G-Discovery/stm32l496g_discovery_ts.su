@@ -1,0 +1,8 @@
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_ts.c:136:9:BSP_TS_Init	16	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_ts.c:150:9:BSP_TS_InitEx	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_ts.c:208:9:BSP_TS_ITConfig	16	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_ts.c:228:9:BSP_TS_ITDeConfig	16	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_ts.c:250:9:BSP_TS_GetState	48	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_ts.c:436:9:BSP_TS_GetOrientation	4	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_ts.c:446:13:BSP_TS_INT_MspInit	40	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_ts.c:476:13:BSP_TS_INT_MspDeInit	40	static

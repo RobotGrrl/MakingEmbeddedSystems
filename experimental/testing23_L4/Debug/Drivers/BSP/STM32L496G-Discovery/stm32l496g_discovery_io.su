@@ -1,0 +1,7 @@
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_io.c:127:9:BSP_IO_Init	16	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_io.c:170:10:BSP_IO_ITGetStatus	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_io.c:189:6:BSP_IO_ITClear	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_io.c:214:9:BSP_IO_ConfigPin	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_io.c:234:6:BSP_IO_WritePin	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_io.c:251:10:BSP_IO_ReadPin	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_io.c:271:6:BSP_IO_TogglePin	24	static
