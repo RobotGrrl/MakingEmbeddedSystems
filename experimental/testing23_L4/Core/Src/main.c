@@ -69,6 +69,7 @@ uint32_t last_ts;
 bool dimmed_screen = false;
 
 bool led_on = false;
+bool gone_sleep = false;
 static uint32_t TimingDelay;
 /* USER CODE END PV */
 
@@ -169,6 +170,11 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
+  	if(gone_sleep) {
+  		//HAL_ResumeTick();
+  		awakeFromSleep();
+  	}
 
   	// by changing the text, we can prove that it's resetting when pressing
   	// the reset button - because the display will say Beep instead of the
@@ -323,9 +329,6 @@ void prepareForSleep(void) {
 
 void enterSleep(void) {
 
-	/* Insert 5 seconds delay */
-	HAL_Delay(5000);
-
 	/* Reduce the System clock to below 2 MHz */
 	SystemClock_Decrease();
 
@@ -338,7 +341,7 @@ void enterSleep(void) {
 	/*BSP_LED_DeInit(LED1);*/
 
 	/* Enter Sleep Mode, wake up is done once User push-button is pressed */
-	HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+	HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFE);
 
 	/* ... Low-power SLEEP mode ... */
 
@@ -371,16 +374,19 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 
 	if(GPIO_Pin == JOY_DOWN_Pin) {
-		//prepareForSleep();
-		//enterSleep();
+//		gone_sleep = true;
+//		HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_HIGH); // JOY_SEL on SYS_WKUP2
+//		prepareForSleep();
+//		enterSleep();
 
 		// simpler version
+		gone_sleep = true;
 		HAL_SuspendTick();
-		HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+		HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFE); // left button configured as event
 	}
 
 	if(GPIO_Pin == JOY_RIGHT_Pin) {
-		//awakeFromSleep();
+//		awakeFromSleep();
 
 		// simpler version
 		HAL_ResumeTick();
@@ -523,7 +529,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
+  //__disable_irq();
 
   // from the pwr example - unclear why this is
   /* Suspend tick */

@@ -80,6 +80,7 @@ void Error_Handler(void);
 #define DCMI_D4_GPIO_Port GPIOH
 #define JOY_LEFT_Pin GPIO_PIN_9
 #define JOY_LEFT_GPIO_Port GPIOI
+#define JOY_LEFT_EXTI_IRQn EXTI9_5_IRQn
 #define DCMI_D7_Pin GPIO_PIN_7
 #define DCMI_D7_GPIO_Port GPIOI
 #define PSRAM_NBL1_Pin GPIO_PIN_1
@@ -217,6 +218,7 @@ void Error_Handler(void);
 #define DF_CKOUT_GPIO_Port GPIOC
 #define MFX_IRQ_OUT_Pin GPIO_PIN_5
 #define MFX_IRQ_OUT_GPIO_Port GPIOC
+#define MFX_IRQ_OUT_EXTI_IRQn EXTI9_5_IRQn
 #define PSRAM_A10_Pin GPIO_PIN_0
 #define PSRAM_A10_GPIO_Port GPIOG
 #define D6_Pin GPIO_PIN_9
