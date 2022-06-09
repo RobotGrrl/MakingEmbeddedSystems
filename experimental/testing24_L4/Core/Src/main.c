@@ -88,12 +88,13 @@ uint16_t range_mm;
 
 uint32_t range_mm_sum = 0;
 uint8_t sum_count = 0;
+uint8_t sum_skip = 0;
 float range_mm_avg = 0.0;
 unsigned long last_sample = 0;
 
-//float all_samples[120];
-//uint16_t num_samples = 30;
-//uint16_t sample_index = 0;
+float all_samples[120];
+uint16_t num_samples = 30;
+uint16_t sample_index = 0;
 
 
 
@@ -410,21 +411,24 @@ int main(void)
 			if(range_mm < 1000) {
 				range_mm_sum += range_mm;
 				sum_count++;
+			} else {
+				// to keep up with the timing
+				sum_skip++;
 			}
 
-			if(sum_count >= 20) { // 20 because 1 sample / 50 ms = 20 samples / s (1000/50=20)
+			if( (sum_count+sum_skip) >= 20) { // 20 because 1 sample / 50 ms = 20 samples / s (1000/50=20)
 				range_mm_avg = (float)range_mm_sum / (float)sum_count;
+
 				sum_count = 0;
+				sum_skip = 0;
 				range_mm_sum = 0;
 
-				/*
 				if(sample_index < num_samples && sample_index < 120) {
 					all_samples[sample_index] = range_mm_avg;
 					sample_index++;
 				} else {
 					// TODO: process all samples
 				}
-				*/
 
 			}
 
