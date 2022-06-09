@@ -1,0 +1,7 @@
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_sram.c:116:9:BSP_SRAM_Init	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_sram.c:159:9:BSP_SRAM_ReadData	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_sram.c:178:9:BSP_SRAM_ReadData_DMA	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_sram.c:197:9:BSP_SRAM_WriteData	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_sram.c:216:9:BSP_SRAM_WriteData_DMA	24	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_sram.c:232:6:BSP_SRAM_DMA_IRQHandler	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_sram.c:245:13:SRAM_MspInit	64	static
