@@ -187,6 +187,8 @@ void Error_Handler(void);
 #define uSD_D1_GPIO_Port GPIOC
 #define uSD_D0_Pin GPIO_PIN_8
 #define uSD_D0_GPIO_Port GPIOC
+#define ARD_D7_Pin GPIO_PIN_6
+#define ARD_D7_GPIO_Port GPIOG
 #define DATIN3_Pin GPIO_PIN_7
 #define DATIN3_GPIO_Port GPIOC
 #define LCD_PWR_ON_Pin GPIO_PIN_0
