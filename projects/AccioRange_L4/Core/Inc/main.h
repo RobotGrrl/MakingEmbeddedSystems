@@ -101,6 +101,8 @@ void Error_Handler(void);
 #define ARD_D3_GPIO_Port GPIOH
 #define DCMI_D3_Pin GPIO_PIN_12
 #define DCMI_D3_GPIO_Port GPIOH
+#define ARD_D4_Pin GPIO_PIN_11
+#define ARD_D4_GPIO_Port GPIOI
 #define I2C1_SCL_Pin GPIO_PIN_8
 #define I2C1_SCL_GPIO_Port GPIOB
 #define USART1_TX_Pin GPIO_PIN_6

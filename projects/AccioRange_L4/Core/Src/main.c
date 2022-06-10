@@ -119,6 +119,7 @@ uint16_t sample_index = 0;
 
 uint16_t raw;
 float raw_in;
+float raw_mm;
 uint8_t buf[12];
 
 
@@ -517,29 +518,48 @@ int main(void)
 
   	if(HAL_GetTick()-last_sample >= TIMED_RANGING_PERIOD) {
 
-  		// Send out buffer (temperature or error message)
-  		//sprintf((char*)buf, "hi there\r\n");
-//  		sprintf((char*)buf,
-//  		              "%u.%u C\r\n",
-//  		              ((unsigned int)temp_c / 100),
-//  		              ((unsigned int)temp_c % 100));
-  		//HAL_UART_Transmit(&huart1, buf, strlen((char*)buf), HAL_MAX_DELAY);
-  		HAL_UART_Transmit(&huart1, "~", 1, HAL_MAX_DELAY);
-
   		// Get ADC value
   		// "10-bit ADC, divide the ADC output by 2 for the range in inches."
 			HAL_ADC_Start(&hadc1);
 			HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
 			raw = HAL_ADC_GetValue(&hadc1);
 			raw_in = (float)raw/2.0;
+			raw_mm = raw_in*2.54*10;
 
 
 			VL53L0X_GetRangingMeasurementData(pDev, &RangingMeasurementData);
 			range = RangingMeasurementData.RangeMilliMeter/10; // cm
 			range_mm = RangingMeasurementData.RangeMilliMeter; // mm
 
+			// ----- comms
+
+			if(range_mm < 400) { // tof stop at 40 cm (self-imposed limit)
+				sprintf((char*)buf, "%d;", range_mm);
+				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET);
+			} else if(raw_mm < 1200) { // sonar stop at 1.2 m (self-imposed limit)
+				sprintf((char*)buf, "%d;", (int)raw_mm);
+				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET);
+			} else {
+				sprintf((char*)buf, "%d;", -1);
+				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET);
+			}
+			HAL_UART_Transmit(&huart1, buf, strlen((char*)buf), HAL_MAX_DELAY);
+
+			// Send out buffer (temperature or error message)
+			  		//sprintf((char*)buf, "hi there\r\n");
+			//  		sprintf((char*)buf,
+			//  		              "%u.%u C\r\n",
+			//  		              ((unsigned int)temp_c / 100),
+			//  		              ((unsigned int)temp_c % 100));
+			  		//HAL_UART_Transmit(&huart1, buf, strlen((char*)buf), HAL_MAX_DELAY);
+			//HAL_UART_Transmit(&huart1, "~", 1, HAL_MAX_DELAY);
+
+
+
+			// ------ avging
+
 			// check it's in range
-			if(range_mm < 1000) {
+			if(range_mm < 400) {
 				range_mm_sum += range_mm;
 				sum_count++;
 			} else {
