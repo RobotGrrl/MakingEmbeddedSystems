@@ -1,0 +1,17 @@
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:74:9:BSP_IDD_Init	80	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:136:6:BSP_IDD_DeInit	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:148:6:BSP_IDD_Reset	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:160:6:BSP_IDD_LowPower	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:172:6:BSP_IDD_StartMeasure	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:190:6:BSP_IDD_Config	48	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:203:6:BSP_IDD_GetValue	16	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:219:6:BSP_IDD_EnableIT	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:231:6:BSP_IDD_ClearIT	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:243:9:BSP_IDD_GetITStatus	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:259:6:BSP_IDD_DisableIT	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:271:9:BSP_IDD_ErrorGetCode	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:302:6:BSP_IDD_ErrorEnableIT	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:314:6:BSP_IDD_ErrorClearIT	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:326:9:BSP_IDD_ErrorGetITStatus	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:342:6:BSP_IDD_ErrorDisableIT	8	static
+../Drivers/BSP/STM32L496G-Discovery/stm32l496g_discovery_idd.c:354:6:BSP_IDD_WakeUp	8	static
