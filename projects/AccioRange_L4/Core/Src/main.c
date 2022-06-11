@@ -63,6 +63,8 @@
 
 /* USER CODE BEGIN PV */
 
+bool sensor_sample = false;
+
 uint8_t xpos = 0;
 uint8_t ypos = 120;
 long last_refresh = 0;
@@ -308,8 +310,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 	if(htim == &htim6) {
 		// toggle ARD_D7
-		// this should be 25 Hz, every 40 ms
+		// this should be 20 Hz, every 50 ms
 		HAL_GPIO_TogglePin(ARD_D7_GPIO_Port, ARD_D7_Pin);
+
+		sensor_sample = true;
 	}
 
 }
@@ -497,6 +501,135 @@ int main(void)
 			awakeFromSleep();
 		}
 
+  	// sampling every 50 ms
+  	if(sensor_sample) {
+
+  		/*
+  		// get sonar ADC value
+			// "10-bit ADC, divide the ADC output by 2 for the range in inches."
+			HAL_ADC_Start(&hadc1);
+			HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
+			sonar_raw = HAL_ADC_GetValue(&hadc1);
+			sonar_raw_mm = (float)(sonar_raw/2.0)*2.54*10;
+
+			// get time of flight i2c value
+			VL53L0X_GetRangingMeasurementData(pDev, &RangingMeasurementData);
+			//tof_raw = RangingMeasurementData.RangeMilliMeter/10; // cm
+			tof_raw_mm = RangingMeasurementData.RangeMilliMeter; // mm
+
+			if(sonar_raw_mm < 1200 && sonar_raw_mm > 200) { // imposed limits
+				sonar_raw_sum += tof_raw_mm;
+				sonar_sum_count++;
+				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET);
+			} else {
+				sonar_sum_skip++;
+				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET);
+			}
+
+			if(tof_raw_mm < 400 && tof_raw_mm > 10) { // imposed limits
+				tof_raw_sum += tof_raw_mm;
+				tof_sum_count++;
+				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET);
+			} else {
+				tof_sum_skip++;
+				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET);
+			}
+
+			uint16_t sonar_total_sum = sonar_sum_count + sonar_sum_skip;
+			uint16_t tof_total_sum = tof_sum_count + tof_sum_skip;
+
+			if(sonar_total_sum >= 20) { // sampling at 20 Hz
+
+				if(sonar_sum_count == 0) {
+					sonar_mm_avg = 0.0;
+				} else {
+					sonar_mm_avg = (float)sonar_raw_sum / (float)sonar_sum_count;
+				}
+
+				sonar_raw_sum = 0;
+				sonar_sum_count = 0;
+				sonar_sum_skip = 0;
+
+				if(sonar_sample_index < num_samples && sonar_sample_index < max_samples) {
+					sonar_samples[sonar_sample_index] = sonar_mm_avg;
+					sonar_sample_index++;
+				} else {
+					sonar_process_samples = true;
+				}
+
+			}
+
+			if(tof_total_sum >= 20) { // sampling at 20 Hz
+
+				if(tof_sum_count == 0) {
+					tof_mm_avg = 0.0;
+				} else {
+					tof_mm_avg = (float)tof_raw_sum / (float)tof_sum_count;
+				}
+
+				tof_raw_sum = 0;
+				tof_sum_count = 0;
+				tof_sum_skip = 0;
+
+				if(tof_sample_index < num_samples && tof_sample_index < max_samples) {
+					tof_samples[tof_sample_index] = tof_mm_avg;
+					tof_sample_index++;
+				} else {
+					tof_process_samples = true;
+				}
+
+			}
+			*/
+
+  		sensor_sample = false; // hope all of this takes < 50 ms
+  	}
+
+
+  	/*
+  	if(sonar_process_samples == true && tof_process_samples == true) {
+
+  		// take an average of all the samples
+  		uint16_t sonar_sample_sum;
+  		float sonar_sample_avg;
+  		for(uint8_t i=0; i<sonar_sample_index; i++) {
+  			sonar_sample_sum += sonar_samples[i];
+  		}
+  		sonar_sample_avg = (float)sonar_sample_sum/(float)sonar_sample_index;
+
+  		// take an average of all the samples
+			uint16_t tof_sample_sum;
+			float tof_sample_avg;
+			for(uint8_t i=0; i<tof_sample_index; i++) {
+				tof_sample_sum += tof_samples[i];
+			}
+			tof_sample_avg = (float)tof_sample_sum/(float)tof_sample_index;
+
+			alpha = 0.75; // TODO: move to top
+			result_distance = (alpha*tof_sample_avg) + ( (1-alpha)*sonar_sample_avg);
+
+			update_result = true;
+  	}
+
+
+  	if(update_result) {
+
+  		// send to uart
+  		if(result_distance > 0) { // sonar stop at 1.2 m (self-imposed limit)
+				sprintf((char*)buf, "%d;", (int)result_distance);
+			} else {
+				sprintf((char*)buf, "%d;", -1);
+			}
+			HAL_UART_Transmit(&huart1, buf, strlen((char*)buf), HAL_MAX_DELAY);
+
+  		// update lcd
+			// TODO
+
+  		update_result = false;
+  	}
+  	*/
+
+
+
 		// by changing the text, we can prove that it's resetting when pressing
 		// the reset button - because the display will say Beep instead of the
 		// other two possibilities
@@ -516,79 +649,7 @@ int main(void)
 
 
 
-  	if(HAL_GetTick()-last_sample >= TIMED_RANGING_PERIOD) {
-
-  		// Get ADC value
-  		// "10-bit ADC, divide the ADC output by 2 for the range in inches."
-			HAL_ADC_Start(&hadc1);
-			HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-			raw = HAL_ADC_GetValue(&hadc1);
-			raw_in = (float)raw/2.0;
-			raw_mm = raw_in*2.54*10;
-
-
-			VL53L0X_GetRangingMeasurementData(pDev, &RangingMeasurementData);
-			range = RangingMeasurementData.RangeMilliMeter/10; // cm
-			range_mm = RangingMeasurementData.RangeMilliMeter; // mm
-
-			// ----- comms
-
-			if(range_mm < 400) { // tof stop at 40 cm (self-imposed limit)
-				sprintf((char*)buf, "%d;", range_mm);
-				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET);
-			} else if(raw_mm < 1200) { // sonar stop at 1.2 m (self-imposed limit)
-				sprintf((char*)buf, "%d;", (int)raw_mm);
-				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET);
-			} else {
-				sprintf((char*)buf, "%d;", -1);
-				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET);
-			}
-			HAL_UART_Transmit(&huart1, buf, strlen((char*)buf), HAL_MAX_DELAY);
-
-			// Send out buffer (temperature or error message)
-			  		//sprintf((char*)buf, "hi there\r\n");
-			//  		sprintf((char*)buf,
-			//  		              "%u.%u C\r\n",
-			//  		              ((unsigned int)temp_c / 100),
-			//  		              ((unsigned int)temp_c % 100));
-			  		//HAL_UART_Transmit(&huart1, buf, strlen((char*)buf), HAL_MAX_DELAY);
-			//HAL_UART_Transmit(&huart1, "~", 1, HAL_MAX_DELAY);
-
-
-
-			// ------ avging
-
-			// check it's in range
-			if(range_mm < 400) {
-				range_mm_sum += range_mm;
-				sum_count++;
-			} else {
-				// to keep up with the timing
-				sum_skip++;
-			}
-
-			if( (sum_count+sum_skip) >= 20) { // 20 because 1 sample / 50 ms = 20 samples / s (1000/50=20)
-				range_mm_avg = (float)range_mm_sum / (float)sum_count;
-
-				sum_count = 0;
-				sum_skip = 0;
-				range_mm_sum = 0;
-
-				if(sample_index < num_samples && sample_index < 120) {
-					all_samples[sample_index] = range_mm_avg;
-					sample_index++;
-				} else {
-					// TODO: process all samples
-				}
-
-			}
-
-			last_sample = HAL_GetTick();
-
-		}
-
-
-
+		// check for last touch
   	// imagine the case where gettick has overflowed, but last_ts has not
 		// eg 100-30000
 		// abs could be used to prevent this from being a negative number, however
@@ -599,6 +660,7 @@ int main(void)
 			BSP_LCD_ScreenDimmingOn();
 			dimmed_screen = true;
 		}
+
 
 
 		uint8_t circle_x = 100;
