@@ -34,7 +34,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-// add these directories to the build paths in project properties
+// be sure to add these directories to the build paths in project properties
 #include <stdbool.h>
 #include "vl53l0x_api.h"
 #include "stm32l496g_discovery.h"
@@ -49,9 +49,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define ERR_DETECT             -1
-#define TIMED_RANGING_PERIOD   50    // in ms
-#define LED_TOGGLE_DELAY         100
+#define TIMED_RANGING_PERIOD    50    // in ms
+#define LED_TOGGLE_DELAY        100
 #define PWR_ANALYSIS 						1
 #define PWR_ANALYSIS_DELAY			1000
 /* USER CODE END PD */
@@ -65,52 +64,22 @@
 
 /* USER CODE BEGIN PV */
 
-bool sensor_sample = false;
-
-uint8_t xpos = 0;
-uint8_t ypos = 120;
-long last_refresh = 0;
-Point prev;
-Point new;
+// touch screen related
 TS_StateTypeDef ts_result;
-bool flip = false;
-bool circle_selected = false;
 uint32_t last_ts;
-bool DIMMED_SCREEN = false;
 
-bool led_on = false;
+// states related
+bool SAMPLE_SENSOR = false;
+bool DIMMED_SCREEN = false;
 bool SLEEP_MODE_ACTIVE = false;
 bool ENTER_SLEEP_MODE = false;
 bool BT_ENABLED = true;
 
+// led related
+bool led_on = false;
 static uint32_t TimingDelay;
 
-/**
- * Global ranging struct
- */
-VL53L0X_RangingMeasurementData_t RangingMeasurementData;
-
-/** leaky factor for filtered range
- *
- * r(n) = averaged_r(n-1)*leaky +r(n)(1-leaky)
- *
- * */
-int LeakyFactorFix8 = (int)( 0.6 *256);
-
-/** How many device detect set by @a DetectSensors()*/
-int nDevPresent=0;
-
-/** bit is index in VL53L0XDevs that is not necessary the dev id of the BSP */
-int nDevMask;
-// EK ^ that is probably not needed after removing the for loop completely
-
-VL53L0X_Dev_t VL53L0XDev = {
-		.Id=0,
-		.DevLetter='e',
-		.I2cHandle=&hi2c1,
-		.I2cDevAddr=0x29 // EK: documentation says address is 0x29, why did the code say 0x52?
-};
-
+// sampling related
 uint16_t range;
 uint16_t range_mm;
 
@@ -130,8 +99,7 @@ float raw_mm;
 uint8_t buf[12];
 
 
-// UI234
-
+// ui related // UI234
 struct Bubble {
    uint16_t x;
    uint16_t y;
@@ -149,13 +117,35 @@ struct Bubble ui_bubbles[4];
 bool bubble_label_redraw = true;
 
 
+// tof related
+VL53L0X_RangingMeasurementData_t RangingMeasurementData; // global ranging struct
+
+VL53L0X_Dev_t VL53L0XDev = {
+		.Id=0,
+		.DevLetter='e',
+		.I2cHandle=&hi2c1,
+		.I2cDevAddr=0x29 // EK: documentation says address is 0x29, why did the code say 0x52?
+};
+
+uint8_t VhvSettings;
+uint8_t PhaseCal;
+uint32_t refSpadCount;
+uint8_t isApertureSpads;
+
+
+// sampling related
+uint16_t sonar_raw = 0;
+float sonar_raw_mm = 0;
+uint16_t tof_raw_mm = 0;
+
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
-void ResetAndDetectSensor(int SetDisplay); // TODO: add this function
 
 // sleep mode related
 void reconfigureFromSleep(void);
@@ -167,6 +157,9 @@ void uiSetup(void);
 void drawBubble(struct Bubble *bubble);
 void deselectBubbles(uint8_t skip);
 
+// tof related
+void tofTestRegisterRead(void);
+void tofInit(void);
 
 /* USER CODE END PFP */
 
@@ -185,165 +178,11 @@ void HandleError(int err){
     while(1){};
 }
 
-/**
- * Reset all sensor then do presence detection
- *
- * All present devices are data initiated and assigned to their final I2C address
- * @return
- */
-int DetectSensors(int SetDisplay) {
-    int i;
-    uint16_t Id;
-    int status;
-    int FinalAddress;
-
-    // EK unused char PresentMsg[5]="    ";
-    /* Reset all */
-    nDevPresent = 0;
-
-    // EK: commenting this out, unclear if it's needed w/o an i2c expander
-    /*
-    for (i = 0; i < 3; i++)
-        status = XNUCLEO53L0A1_ResetId(i, 0);
-    */
-    // EK: this function is in the HAL for that nucleo board
-    // why would it be located there if it is for the sensor?
-    // what is that code doing - something about an expander? why?
-
-    /* detect all sensors (even on-board)*/
-    // EK no need for for loop for (i = 0; i < 3; i++) {
-
-    i = 0; // EK: in case anything is out there using i
-
-    		VL53L0X_Dev_t *pDev;
-        pDev = &VL53L0XDev; // EK: only using one //&VL53L0XDevs[i];
-        pDev->I2cDevAddr = 0x29; // EK: documentation says address is 0x29, why did the code say 0x52? //0x52;
-        pDev->Present = 0;
-        status = 1; // EK: is this needed? XNUCLEO53L0A1_ResetId( pDev->Id, 1);
-        HAL_Delay(2); // EK: why is this here
-        FinalAddress= 0x29; // EK: see comment a few lines above about address // 0x52+(i+1)*2;
-
-        do {
-        	/* Set I2C standard mode (400 KHz) before doing the first register access */
-        	// EK: why is this, just do it  if (status == VL53L0X_ERROR_NONE)
-        	// EK let's not do this status = VL53L0X_WrByte(pDev, 0x88, 0x00);
-
-        	/* Try to read one register using default 0x52 address */
-            status = VL53L0X_RdWord(pDev, VL53L0X_REG_IDENTIFICATION_MODEL_ID, &Id);
-            if (status) {
-                printf("#%d Read id fail\n", i);
-                break;
-            }
-            if (Id == 0xEEAA) {
-				/* Sensor is found => Change its I2C address to final one */
-                status = VL53L0X_SetDeviceAddress(pDev,FinalAddress);
-                if (status != 0) {
-                    printf("#%d VL53L0X_SetDeviceAddress fail\n", i);
-                    break;
-                }
-                pDev->I2cDevAddr = FinalAddress;
-                /* Check all is OK with the new I2C address and initialize the sensor */
-                status = VL53L0X_RdWord(pDev, VL53L0X_REG_IDENTIFICATION_MODEL_ID, &Id);
-                if (status != 0) {
-					printf("#%d VL53L0X_RdWord fail\n", i);
-					break;
-				}
-
-                status = VL53L0X_DataInit(pDev);
-                if( status == 0 ){
-                    pDev->Present = 1;
-                }
-                else{
-                    printf("VL53L0X_DataInit %d fail\n", i);
-                    break;
-                }
-                printf("VL53L0X %d Present and initiated to final 0x%x\n", pDev->Id, pDev->I2cDevAddr);
-                nDevPresent++;
-                nDevMask |= 1 << i;
-                pDev->Present = 1;
-            }
-            else {
-                printf("#%d unknown ID %x\n", i, Id);
-                status = 1;
-            }
-        } while (0);
-        /* if fail r can't use for any reason then put the  device back to reset */
-        if (status) {
-        	  printf("something failed"); // EK
-            // EK why is this needed XNUCLEO53L0A1_ResetId(i, 0);
-        }
-
-    // EK no need for for loop }
-
-    // EK: not needed
-    /* Display detected sensor(s) */
-    /*
-    if( SetDisplay ){
-        for(i=0; i<3; i++){
-            if( VL53L0XDevs[i].Present ){
-                PresentMsg[i+1]=VL53L0XDevs[i].DevLetter;
-            }
-        }
-        PresentMsg[0]=' ';
-        XNUCLEO53L0A1_SetDisplayString(PresentMsg);
-        HAL_Delay(1000);
-    }
-    */
-
-    return nDevPresent;
-}
-
-void ResetAndDetectSensor(int SetDisplay){
-    int nSensor;
-    nSensor = DetectSensors(SetDisplay);
-
-    // EK added this
-    if( VL53L0XDev.Present==0 )
-    {
-    	HandleError(ERR_DETECT);
-    }
-
-    /* at least one sensor and if one it must be the built-in one  */
-    if( (nSensor <=0) ) { // EK ||  (nSensor ==1 && VL53L0XDevs[1].Present==0) ){
-        HandleError(ERR_DETECT);
-    }
-}
-
-VL53L0X_Error WaitStopCompleted(VL53L0X_DEV Dev) {
-    VL53L0X_Error Status = VL53L0X_ERROR_NONE;
-    uint32_t StopCompleted=0;
-    uint32_t LoopNb;
-
-    // Wait until it finished
-    // use timeout to avoid deadlock
-    if (Status == VL53L0X_ERROR_NONE) {
-        LoopNb = 0;
-        do {
-            Status = VL53L0X_GetStopCompletedStatus(Dev, &StopCompleted);
-            if ((StopCompleted == 0x00) || Status != VL53L0X_ERROR_NONE) {
-                break;
-            }
-            LoopNb = LoopNb + 1;
-            VL53L0X_PollingDelay(Dev);
-        } while (LoopNb < VL53L0X_DEFAULT_MAX_LOOP);
-
-        if (LoopNb >= VL53L0X_DEFAULT_MAX_LOOP) {
-            Status = VL53L0X_ERROR_TIME_OUT;
-        }
-
-    }
-
-    return Status;
-}
-
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 	if(htim == &htim6) {
-		// toggle ARD_D7
-		// this should be 20 Hz, every 50 ms
-		HAL_GPIO_TogglePin(ARD_D7_GPIO_Port, ARD_D7_Pin);
-
-		sensor_sample = true;
+		HAL_GPIO_TogglePin(ARD_D7_GPIO_Port, ARD_D7_Pin); // test point for profiling
+		SAMPLE_SENSOR = true;
 	}
 
 }
@@ -402,28 +241,15 @@ int main(void)
   /* USER CODE BEGIN 2 */
   // above: MX_SDMMC1_SD_Init(); has to be commented out to not be called
 
-
-
-  /* LCD Init */
-	if (BSP_LCD_InitEx(LCD_ORIENTATION_LANDSCAPE) == LCD_ERROR)
-	{
-		/* Initialization Error */
+  // lcd init
+	if (BSP_LCD_InitEx(LCD_ORIENTATION_LANDSCAPE) == LCD_ERROR) {
 		Error_Handler();
 	}
-
-
-	// the lcd bsp includes the fontNN.c files in the Utilities directory
-	// in that file, a struct is declared: FontNN
-	//BSP_LCD_SetFont(&Font24);
-	//BSP_LCD_DisplayStringAt(0, 240 - 65, (uint8_t *)"Accio Range", CENTER_MODE);
-
-
 
 	// touchscreen init
 	if(BSP_TS_InitEx(BSP_LCD_GetXSize(), BSP_LCD_GetYSize(), LCD_ORIENTATION_LANDSCAPE) != TS_OK) {
 		Error_Handler();
 	}
-
 
 	// LED GPIO
 	BSP_LED_Init(LED2_PIN); // LD1
@@ -435,75 +261,42 @@ int main(void)
 	HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_SET); // turn on BT pwr transistor
 
 
-	// Start timer
-	HAL_TIM_Base_Start_IT(&htim6);
-
-	//ResetAndDetectSensor(1); // EK TODO: the parameter SetDisplay doesn't matter
-
-	// EK test1
-	HAL_StatusTypeDef status;
-	uint8_t pData;
-	status = HAL_I2C_Mem_Read(&hi2c1, 0x52, 0xC0, 1, &pData, 1, HAL_TIMEOUT);
-	// pData should be 0xEE
-	if(status == HAL_OK) {
-		printf("good");
-	}
-	//--
-
-	// EK test2
+	// tof related
 	VL53L0X_Dev_t *pDev;
 	pDev = &VL53L0XDev;
+	tofTestRegisterRead();
+	//tofInit();
+
 	pDev->I2cDevAddr = 0x52;
 	pDev->Present = 0;
 
-	int status2 = VL53L0X_DataInit(pDev);
-	if( status2 == 0 ){
+	int status = VL53L0X_DataInit(pDev);
+	if(status == 0) {
 			pDev->Present = 1;
-	}
-	else{
+	} else {
 			printf("VL53L0X_DataInit fail\n");
+			return;
 	}
 	printf("VL53L0X %d Present and initiated to final 0x%x\n", pDev->Id, pDev->I2cDevAddr);
 	pDev->Present = 1;
-	//--
-
-	// EK test3
-	uint8_t VhvSettings;
-	uint8_t PhaseCal;
-	uint32_t refSpadCount;
-	uint8_t isApertureSpads;
-	VL53L0X_RangingMeasurementData_t RangingMeasurementData;
-	//int range;
 
 	// Initialize the device in continuous ranging mode
 	VL53L0X_StaticInit(pDev);
 	VL53L0X_PerformRefCalibration(pDev, &VhvSettings, &PhaseCal);
 	VL53L0X_PerformRefSpadManagement(pDev, &refSpadCount, &isApertureSpads);
-	//VL53L0X_SetInterMeasurementPeriodMilliSeconds(pDev, 250); // Program continuous mode Inter-Measurement period in milliseconds
-	//VL53L0X_SetDeviceMode(pDev, VL53L0X_DEVICEMODE_CONTINUOUS_RANGING);
 	VL53L0X_SetInterMeasurementPeriodMilliSeconds(pDev, TIMED_RANGING_PERIOD);
 	VL53L0X_SetDeviceMode(pDev, VL53L0X_DEVICEMODE_CONTINUOUS_TIMED_RANGING);
-
-	// Start continuous ranging
 	VL53L0X_StartMeasurement(pDev);
 
-	/*
-	for(uint8_t i=0; i<5; i++) {
-		VL53L0X_GetRangingMeasurementData(pDev, &RangingMeasurementData);
-		range = (int)RangingMeasurementData.RangeMilliMeter/10;
-		HAL_Delay(100);
-	}
 
-	// Stop continuous ranging
-	VL53L0X_StopMeasurement(pDev);
-
-	// Ensure device is ready for other commands
-	WaitStopCompleted(pDev);
-	*/
-	//--
-
-
+	// ui related
 	uiSetup();
+
+
+	// start timer
+  HAL_TIM_Base_Start_IT(&htim6);
+
+
 
   /* USER CODE END 2 */
 
@@ -524,6 +317,7 @@ int main(void)
 			bubble_label_redraw = true;
 		}
 
+
   	// flag set from interrupt to enter in to sleep mode
   	if(ENTER_SLEEP_MODE) {
   		enterSleep();
@@ -535,9 +329,8 @@ int main(void)
 
 
   	// sampling every 50 ms
-  	if(sensor_sample) {
+  	if(SAMPLE_SENSOR) {
 
-  		/*
   		// get sonar ADC value
 			// "10-bit ADC, divide the ADC output by 2 for the range in inches."
 			HAL_ADC_Start(&hadc1);
@@ -547,9 +340,9 @@ int main(void)
 
 			// get time of flight i2c value
 			VL53L0X_GetRangingMeasurementData(pDev, &RangingMeasurementData);
-			//tof_raw = RangingMeasurementData.RangeMilliMeter/10; // cm
 			tof_raw_mm = RangingMeasurementData.RangeMilliMeter; // mm
 
+			/*
 			if(sonar_raw_mm < 1200 && sonar_raw_mm > 200) { // imposed limits
 				sonar_raw_sum += tof_raw_mm;
 				sonar_sum_count++;
@@ -614,7 +407,7 @@ int main(void)
 			}
 			*/
 
-  		sensor_sample = false; // hope all of this takes < 50 ms
+  		SAMPLE_SENSOR = false; // hope all of this takes < 50 ms
   	}
 
 
@@ -664,20 +457,6 @@ int main(void)
   		update_result = false;
   	}
   	*/
-
-
-
-		// by changing the text, we can prove that it's resetting when pressing
-		// the reset button - because the display will say Beep instead of the
-		// other two possibilities
-		if(TimingDelay == 0) {
-			if(led_on) {
-				BSP_LED_On(LED2_PIN); // LD1 orange
-			} else {
-				BSP_LED_Off(LED2_PIN); // LD1 orange
-			}
-			led_on = !led_on;
-		}
 
 
 
@@ -745,7 +524,6 @@ int main(void)
 		} // touches end
 
 
-
 		// check for last touch
 		// imagine the case where gettick has overflowed, but last_ts has not
 		// eg 100-30000
@@ -758,6 +536,18 @@ int main(void)
 			BSP_LCD_ScreenDimmingOn();
 			DIMMED_SCREEN = true;
 		}
+
+
+		// led heartbeat
+		if(TimingDelay == 0) {
+			if(led_on) {
+				BSP_LED_On(LED2_PIN); // LD1 orange
+			} else {
+				BSP_LED_Off(LED2_PIN); // LD1 orange
+			}
+			led_on = !led_on;
+		}
+
 
     /* USER CODE END WHILE */
 
@@ -857,6 +647,43 @@ void PeriphCommonClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void tofTestRegisterRead(void) {
+	HAL_StatusTypeDef status;
+	uint8_t pData;
+	status = HAL_I2C_Mem_Read(&hi2c1, 0x52, 0xC0, 1, &pData, 1, HAL_TIMEOUT);
+	// pData should be 0xEE
+	if(status == HAL_OK) {
+		printf("good");
+	}
+}
+
+void tofInit(void) {
+	/*
+	pDev->I2cDevAddr = 0x52;
+	pDev->Present = 0;
+
+	int status = VL53L0X_DataInit(pDev);
+	if(status == 0) {
+			pDev->Present = 1;
+	} else {
+			printf("VL53L0X_DataInit fail\n");
+			return;
+	}
+	printf("VL53L0X %d Present and initiated to final 0x%x\n", pDev->Id, pDev->I2cDevAddr);
+	pDev->Present = 1;
+
+	// Initialize the device in continuous ranging mode
+	VL53L0X_StaticInit(pDev);
+	VL53L0X_PerformRefCalibration(pDev, &VhvSettings, &PhaseCal);
+	VL53L0X_PerformRefSpadManagement(pDev, &refSpadCount, &isApertureSpads);
+	VL53L0X_SetInterMeasurementPeriodMilliSeconds(pDev, TIMED_RANGING_PERIOD);
+	VL53L0X_SetDeviceMode(pDev, VL53L0X_DEVICEMODE_CONTINUOUS_TIMED_RANGING);
+	VL53L0X_StartMeasurement(pDev);
+	*/
+}
+
+
 
 
 // UI123
@@ -975,7 +802,7 @@ void reconfigureFromSleep(void) {
 void awakeFromSleep(void) {
 
 	// turn on LD1, LD2
-	BSP_LED_On(LED2_PIN); // LD1 orange turns off
+	BSP_LED_On(LED2_PIN); // LD1 orange turns on
 	HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET); // LD2 green turns on
 	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
 
