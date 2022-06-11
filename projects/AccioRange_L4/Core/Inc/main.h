@@ -186,6 +186,8 @@ void Error_Handler(void);
 #define CTP_INT_Pin GPIO_PIN_14
 #define CTP_INT_GPIO_Port GPIOG
 #define CTP_INT_EXTI_IRQn EXTI15_10_IRQn
+#define ARD_D2_Pin GPIO_PIN_13
+#define ARD_D2_GPIO_Port GPIOG
 #define DCMI_CLK_Pin GPIO_PIN_8
 #define DCMI_CLK_GPIO_Port GPIOA
 #define uSD_D1_Pin GPIO_PIN_9

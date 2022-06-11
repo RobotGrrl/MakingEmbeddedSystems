@@ -52,6 +52,7 @@
 #define ERR_DETECT             -1
 #define TIMED_RANGING_PERIOD   50    // in ms
 #define LED_TOGGLE_DELAY         100
+#define PWR_ANALYSIS 						1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -78,6 +79,8 @@ bool dimmed_screen = false;
 
 bool led_on = false;
 bool gone_sleep = false;
+bool enter_sleep_mode = false;
+
 static uint32_t TimingDelay;
 
 /**
@@ -411,13 +414,14 @@ int main(void)
 	BSP_LCD_ScreenDimmingConfig(100, 5, 1, 20);
 
 
-
-	// LED
-	BSP_LED_Init(LED1_PIN);
-	BSP_LED_Init(LED2_PIN);
-	BSP_LED_Off( LED1_PIN ); // orange labeled LD1
-	BSP_LED_Off( LED2_PIN ); // doesn't work
-
+	// LED GPIO
+	BSP_LED_Init(LED2_PIN); // LD1
+	BSP_LED_On(LED2_PIN); // LD1 orange turns on
+	HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET); // LD2 green turns on
+	// LD3 is attached to ARD_D13, which is not an output, it's attached to SPI
+	HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET); // laser
+	HAL_GPIO_WritePin(ARD_D7_GPIO_Port, ARD_D7_Pin, GPIO_PIN_RESET); // test point: timer frequency
+	HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_SET); // turn on BT pwr transistor
 
 
 	// Start timer
@@ -499,7 +503,78 @@ int main(void)
   	if(gone_sleep) {
 			//HAL_ResumeTick();
 			awakeFromSleep();
+
+			// turn on LD1, LD2
+			BSP_LED_On(LED2_PIN); // LD1 orange turns off
+			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET); // LD2 green turns on
+			if(PWR_ANALYSIS) HAL_Delay(100);
+
+			// turn on BT pwr transistor
+			HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_SET);
+			if(PWR_ANALYSIS) HAL_Delay(100);
+
+			// turn on lcd
+//			BSP_LCD_ScreenDimmingOff();
+			BSP_LCD_DisplayOn();
+			dimmed_screen = false;
+			if(PWR_ANALYSIS) HAL_Delay(100);
+
+			// turn on laser and test point
+			HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET); // laser
+			HAL_GPIO_WritePin(ARD_D7_GPIO_Port, ARD_D7_Pin, GPIO_PIN_SET); // test point: timer frequency
+			if(PWR_ANALYSIS) HAL_Delay(100);
+
+			// turn on ts
+			BSP_TS_ITConfig();
+			if(PWR_ANALYSIS) HAL_Delay(100);
+
+			// set flags
+			enter_sleep_mode = false;
+			gone_sleep = false;
+
 		}
+
+
+
+  	if(enter_sleep_mode) {
+
+  		// turn off ts
+  		BSP_TS_ITDeConfig();
+
+  		// turn off lcd
+			BSP_LCD_Clear(LCD_COLOR_WHITE);
+			if(dimmed_screen == true) {
+				BSP_LCD_ScreenDimmingOff();
+			}
+			BSP_LCD_ScreenDimmingConfig(100, 0, 5, 20);
+			BSP_LCD_ScreenDimmingOn();
+			BSP_LCD_DisplayOff();
+			dimmed_screen = true;
+			HAL_Delay(1000); // wait for fade to finish
+			HAL_GPIO_WritePin(LCD_BL_CTRL_GPIO_PORT, LCD_BL_CTRL_PIN, GPIO_PIN_RESET); // force the backlight off
+
+			// turn off BT pwr transistor
+			HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_RESET);
+			if(PWR_ANALYSIS) HAL_Delay(100);
+
+			// turn off LD1, LD2
+			BSP_LED_Off(LED2_PIN); // LD1 orange turns off
+			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_SET); // LD2 green turns off
+			if(PWR_ANALYSIS) HAL_Delay(100);
+
+			// turn off laser and test point
+			HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET); // laser
+			HAL_GPIO_WritePin(ARD_D7_GPIO_Port, ARD_D7_Pin, GPIO_PIN_RESET); // test point: timer frequency
+			if(PWR_ANALYSIS) HAL_Delay(100);
+
+			enter_sleep_mode = false;
+			gone_sleep = true;
+			HAL_SuspendTick();
+			HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFE); // left button configured as event
+
+  	}
+
+
 
   	// sampling every 50 ms
   	if(sensor_sample) {
@@ -613,6 +688,10 @@ int main(void)
 
   	if(update_result) {
 
+			// this should already be on, but let's do it again just in case...
+			// turn on BT pwr transistor
+  		HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_SET);
+
   		// send to uart
   		if(result_distance > 0) { // sonar stop at 1.2 m (self-imposed limit)
 				sprintf((char*)buf, "%d;", (int)result_distance);
@@ -636,11 +715,13 @@ int main(void)
 		if(TimingDelay == 0) {
 			/* Toggle LED1 */
 			if(led_on) {
-				BSP_LED_Off(LED1);
+				BSP_LED_On(LED2_PIN); // LD1 orange
+
 				BSP_LCD_Clear(LCD_COLOR_WHITE);
 				BSP_LCD_DisplayStringAt(0, 240 - 65, (uint8_t *)"Zweep", CENTER_MODE);
 			} else {
-				BSP_LED_On(LED1);
+				BSP_LED_Off(LED2_PIN); // LD1 orange
+
 				BSP_LCD_Clear(LCD_COLOR_WHITE);
 				BSP_LCD_DisplayStringAt(0, 240 - 65, (uint8_t *)"Fleep", CENTER_MODE);
 			}
@@ -655,8 +736,8 @@ int main(void)
 		// abs could be used to prevent this from being a negative number, however
 		// in this case, it is not needed, because two unsigned integers being
 		// subtracted results in an unsigned integer
-		if( HAL_GetTick()-last_ts >= 1000 && dimmed_screen == false) {
-			BSP_LCD_ScreenDimmingConfig(100, 5, 1, 20);
+		if( HAL_GetTick()-last_ts >= 3000 && dimmed_screen == false) {
+			BSP_LCD_ScreenDimmingConfig(100, 5, 5, 20); // 100-5=95/5=19*20=380ms
 			BSP_LCD_ScreenDimmingOn();
 			dimmed_screen = true;
 		}
@@ -885,9 +966,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 //		enterSleep();
 
 		// simpler version
-		gone_sleep = true;
-		HAL_SuspendTick();
-		HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFE); // left button configured as event
+		enter_sleep_mode = true;
 	}
 
 	// LEFT wakes it up as an event
