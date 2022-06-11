@@ -53,6 +53,7 @@
 #define LED_TOGGLE_DELAY        100
 #define PWR_ANALYSIS 						1
 #define PWR_ANALYSIS_DELAY			1000
+#define RANGER_SAMPLE_RATE      20    // samples per second
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -138,7 +139,36 @@ uint16_t sonar_raw = 0;
 float sonar_raw_mm = 0;
 uint16_t tof_raw_mm = 0;
 
+// RAN_
 
+struct Ranger {
+	uint16_t max;
+	uint16_t min;
+
+	uint16_t raw;
+	float raw_mm;
+
+	float raw_sum;
+	uint16_t sum_count;
+	uint16_t sum_skip;
+
+	float mm_avg;
+
+	uint16_t record_index;
+	float records[300];
+	bool process_records;
+	float record_sum;
+
+	float val;
+};
+uint8_t num_rangers = 2;
+struct Ranger rangers[2];
+
+uint16_t NUM_RECORDS = 10;
+uint16_t MAX_RECORDS = 300; // =5mins*60seconds
+
+float sonar_mm_avg = 0.0;
+float tof_mm_avg = 0.0;
 
 /* USER CODE END PV */
 
@@ -289,6 +319,31 @@ int main(void)
 	VL53L0X_StartMeasurement(pDev);
 
 
+	// sampling related
+	for(uint8_t i=0; i<num_rangers; i++) {
+		struct Ranger *r = &rangers[i];
+		r->max = 0;
+		r->min = 0;
+		r->raw = 0;
+		r->raw_mm = 0.0;
+		r->raw_sum = 0.0;
+		r->sum_count = 0;
+		r->sum_skip = 0;
+		r->mm_avg = 0.0;
+		r->record_index = 0;
+		for(uint16_t j=0; j<MAX_RECORDS; j++) {
+			r->records[j] = 0.0;
+		}
+		r->process_records = false;
+		r->record_sum = 0.0;
+		r->val = 0.0;
+	}
+	rangers[0].max = 1200; // mm sonar
+	rangers[0].min = 200;
+	rangers[1].max = 400; // mm tof
+	rangers[1].min = 10;
+
+
 	// ui related
 	uiSetup();
 
@@ -328,86 +383,85 @@ int main(void)
 
 
 
+  	// processing the sensor data
   	// sampling every 50 ms
+  	// flag set from timer
   	if(SAMPLE_SENSOR) {
 
-  		// get sonar ADC value
+  		// get sonar adc value
 			// "10-bit ADC, divide the ADC output by 2 for the range in inches."
 			HAL_ADC_Start(&hadc1);
 			HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-			sonar_raw = HAL_ADC_GetValue(&hadc1);
-			sonar_raw_mm = (float)(sonar_raw/2.0)*2.54*10;
+			rangers[0].raw = HAL_ADC_GetValue(&hadc1);
+			rangers[0].raw_mm = (float)(rangers[0].raw/2.0)*2.54*10;
 
 			// get time of flight i2c value
 			VL53L0X_GetRangingMeasurementData(pDev, &RangingMeasurementData);
-			tof_raw_mm = RangingMeasurementData.RangeMilliMeter; // mm
+			rangers[1].raw_mm = RangingMeasurementData.RangeMilliMeter; // mm
 
-			/*
-			if(sonar_raw_mm < 1200 && sonar_raw_mm > 200) { // imposed limits
-				sonar_raw_sum += tof_raw_mm;
-				sonar_sum_count++;
-				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET);
-			} else {
-				sonar_sum_skip++;
-				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET);
-			}
+			// RAN_
 
-			if(tof_raw_mm < 400 && tof_raw_mm > 10) { // imposed limits
-				tof_raw_sum += tof_raw_mm;
-				tof_sum_count++;
-				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET);
-			} else {
-				tof_sum_skip++;
-				HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET);
-			}
+			for(uint8_t i=0; i<num_rangers; i++) {
+				struct Ranger *r = &rangers[i];
 
-			uint16_t sonar_total_sum = sonar_sum_count + sonar_sum_skip;
-			uint16_t tof_total_sum = tof_sum_count + tof_sum_skip;
-
-			if(sonar_total_sum >= 20) { // sampling at 20 Hz
-
-				if(sonar_sum_count == 0) {
-					sonar_mm_avg = 0.0;
+				// clamp the values between a min and max
+				// if it doesn't fit, skip it
+				if(r->raw_mm < r->max && r->raw_mm > r->min) {
+					r->raw_sum += r->raw_mm;
+					r->sum_count++;
+					HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET); // laser on
 				} else {
-					sonar_mm_avg = (float)sonar_raw_sum / (float)sonar_sum_count;
+					r->sum_skip++;
+					HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET); // laser off
 				}
 
-				sonar_raw_sum = 0;
-				sonar_sum_count = 0;
-				sonar_sum_skip = 0;
+				uint16_t total_sum = r->sum_count + r->sum_skip;
 
-				if(sonar_sample_index < num_samples && sonar_sample_index < max_samples) {
-					sonar_samples[sonar_sample_index] = sonar_mm_avg;
-					sonar_sample_index++;
-				} else {
-					sonar_process_samples = true;
+				// check for when the count matches the sample rate
+				if(total_sum >= RANGER_SAMPLE_RATE) {
+
+					if(r->sum_count > 0) {
+						r->mm_avg = r->raw_sum / (float)r->sum_count; // get the average
+					} else {
+						r->mm_avg = 0.0; // clamp to 0 if there was nothing added
+					}
+
+					// reset the counters
+					r->raw_sum = 0;
+					r->sum_count = 0;
+					r->sum_skip = 0;
+
+					// see if there's enough records ready to make the readout
+					if(r->record_index < NUM_RECORDS && r->record_index < MAX_RECORDS) {
+						r->records[r->record_index] = r->mm_avg;
+						r->record_index++;
+					} else {
+						r->process_records = true;
+					}
+
 				}
 
-			}
-
-			if(tof_total_sum >= 20) { // sampling at 20 Hz
-
-				if(tof_sum_count == 0) {
-					tof_mm_avg = 0.0;
-				} else {
-					tof_mm_avg = (float)tof_raw_sum / (float)tof_sum_count;
+				// update our live variables
+				if(i==0) {
+					sonar_mm_avg = r->mm_avg;
+				} else if(i==1) {
+					tof_mm_avg = r->mm_avg;
 				}
 
-				tof_raw_sum = 0;
-				tof_sum_count = 0;
-				tof_sum_skip = 0;
+			} // end of rangers loop
 
-				if(tof_sample_index < num_samples && tof_sample_index < max_samples) {
-					tof_samples[tof_sample_index] = tof_mm_avg;
-					tof_sample_index++;
-				} else {
-					tof_process_samples = true;
-				}
+			// hope all of this takes < 50 ms
 
-			}
-			*/
+  		SAMPLE_SENSOR = false; // set to true by timer
+  	}
 
-  		SAMPLE_SENSOR = false; // hope all of this takes < 50 ms
+
+  	// process the records
+  	for(uint8_t i=0; i<num_rangers; i++) {
+  		struct Ranger *r = &rangers[i];
+
+  		// TODO
+
   	}
 
 
