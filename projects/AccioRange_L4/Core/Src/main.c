@@ -53,6 +53,7 @@
 #define TIMED_RANGING_PERIOD   50    // in ms
 #define LED_TOGGLE_DELAY         100
 #define PWR_ANALYSIS 						1
+#define PWR_ANALYSIS_DELAY			1000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -78,8 +79,9 @@ uint32_t last_ts;
 bool dimmed_screen = false;
 
 bool led_on = false;
-bool gone_sleep = false;
-bool enter_sleep_mode = false;
+bool SLEEP_MODE_ACTIVE = false;
+bool ENTER_SLEEP_MODE = false;
+bool BT_ENABLED = true;
 
 static uint32_t TimingDelay;
 
@@ -136,11 +138,12 @@ void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 void ResetAndDetectSensor(int SetDisplay); // TODO: add this function
-void SystemPower_Config(void);
-void SystemClock_Decrease(void);
-void prepareForSleep(void);
-void enterSleep(void);
+
+// sleep mode related
+void reconfigureFromSleep(void);
 void awakeFromSleep(void);
+void enterSleep(void);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -499,80 +502,19 @@ int main(void)
   while (1)
   {
 
-  	// this has to be the 1st thing in the loop
-  	if(gone_sleep) {
-			//HAL_ResumeTick();
+  	// wake from event, the first thing seen after exiting sleep mode
+  	if(SLEEP_MODE_ACTIVE) {
+			reconfigureFromSleep();
 			awakeFromSleep();
-
-			// turn on LD1, LD2
-			BSP_LED_On(LED2_PIN); // LD1 orange turns off
-			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET); // LD2 green turns on
-			if(PWR_ANALYSIS) HAL_Delay(100);
-
-			// turn on BT pwr transistor
-			HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_SET);
-			if(PWR_ANALYSIS) HAL_Delay(100);
-
-			// turn on lcd
-//			BSP_LCD_ScreenDimmingOff();
-			BSP_LCD_DisplayOn();
-			dimmed_screen = false;
-			if(PWR_ANALYSIS) HAL_Delay(100);
-
-			// turn on laser and test point
-			HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET); // laser
-			HAL_GPIO_WritePin(ARD_D7_GPIO_Port, ARD_D7_Pin, GPIO_PIN_SET); // test point: timer frequency
-			if(PWR_ANALYSIS) HAL_Delay(100);
-
-			// turn on ts
-			BSP_TS_ITConfig();
-			if(PWR_ANALYSIS) HAL_Delay(100);
-
-			// set flags
-			enter_sleep_mode = false;
-			gone_sleep = false;
-
 		}
 
-
-
-  	if(enter_sleep_mode) {
-
-  		// turn off ts
-  		BSP_TS_ITDeConfig();
-
-  		// turn off lcd
-			BSP_LCD_Clear(LCD_COLOR_WHITE);
-			if(dimmed_screen == true) {
-				BSP_LCD_ScreenDimmingOff();
-			}
-			BSP_LCD_ScreenDimmingConfig(100, 0, 5, 20);
-			BSP_LCD_ScreenDimmingOn();
-			BSP_LCD_DisplayOff();
-			dimmed_screen = true;
-			HAL_Delay(1000); // wait for fade to finish
-			HAL_GPIO_WritePin(LCD_BL_CTRL_GPIO_PORT, LCD_BL_CTRL_PIN, GPIO_PIN_RESET); // force the backlight off
-
-			// turn off BT pwr transistor
-			HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_RESET);
-			if(PWR_ANALYSIS) HAL_Delay(100);
-
-			// turn off LD1, LD2
-			BSP_LED_Off(LED2_PIN); // LD1 orange turns off
-			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_SET); // LD2 green turns off
-			if(PWR_ANALYSIS) HAL_Delay(100);
-
-			// turn off laser and test point
-			HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET); // laser
-			HAL_GPIO_WritePin(ARD_D7_GPIO_Port, ARD_D7_Pin, GPIO_PIN_RESET); // test point: timer frequency
-			if(PWR_ANALYSIS) HAL_Delay(100);
-
-			enter_sleep_mode = false;
-			gone_sleep = true;
+  	// flag set from interrupt to enter in to sleep mode
+  	if(ENTER_SLEEP_MODE) {
+  		enterSleep();
 			HAL_SuspendTick();
 			HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFE); // left button configured as event
-
   	}
+
 
 
 
@@ -878,64 +820,7 @@ void PeriphCommonClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-
-void prepareForSleep(void) {
-
-	/* Configure the system Power */
-	SystemPower_Config();
-
-	/* Enable Power Clock */
-	__HAL_RCC_PWR_CLK_ENABLE();
-
-	/* User push-button (lines 10 to 15) will be used to wakeup the system from STOP mode */
-	// idk what to do for this
-	// added interrupt for joy sel & joy down
-	//BSP_PB_Init(JOY_SEL, JOY_MODE_EXTI);
-
-	/* Disable Prefetch Buffer */
-	__HAL_FLASH_PREFETCH_BUFFER_DISABLE();
-
-	/* Enable Flash power down mode during Sleep mode     */
-	/* (uncomment this line if power consumption figures  */
-	/*  must be measured with Flash still on in Low Power */
-	/*  Sleep mode)                                       */
-	__HAL_FLASH_SLEEP_POWERDOWN_ENABLE();
-
-	/* Reset all RCC Sleep and Stop modes register to */
-	/* improve power consumption                      */
-	RCC->AHB1SMENR  = 0x0;
-	RCC->AHB2SMENR  = 0x0;
-	RCC->AHB3SMENR  = 0x0;
-
-	RCC->APB1SMENR1 = 0x0;
-	RCC->APB1SMENR2 = 0x0;
-	RCC->APB2SMENR  = 0x0;
-
-}
-
-void enterSleep(void) {
-
-	/* Reduce the System clock to below 2 MHz */
-	SystemClock_Decrease();
-
-	/* Suspend Tick increment to prevent wakeup by Systick interrupt.         */
-	/* Otherwise the Systick interrupt will wake up the device within 1ms     */
-	/* (HAL time base).                                                       */
-	HAL_SuspendTick();
-
-	/* De-init LED1 */
-	/*BSP_LED_DeInit(LED1);*/
-
-	/* Enter Sleep Mode, wake up is done once User push-button is pressed */
-	HAL_PWR_EnterSLEEPMode(PWR_LOWPOWERREGULATOR_ON, PWR_SLEEPENTRY_WFE);
-
-	/* ... Low-power SLEEP mode ... */
-
-}
-
-void awakeFromSleep(void) {
-	BSP_LED_On(LED1);
-
+void reconfigureFromSleep(void) {
 	/* System is Low Power Run mode when exiting Low Power Sleep mode,
 		 disable low power run mode and reset the clock to initialization configuration */
 	HAL_PWREx_DisableLowPowerRunMode();
@@ -944,14 +829,85 @@ void awakeFromSleep(void) {
 	SystemClock_Config();
 
 	/* Configure the peripherals common clocks */
-	// should this go here too? added it
 	PeriphCommonClock_Config();
 
-	/* Re-init LED1 to toggle during Run mode */
-	/*BSP_LED_Init(LED1);*/
+	/* Re-init GPIOs */
+	MX_GPIO_Init();
 
 	/* Resume Tick interrupt if disabled prior to Low Power Sleep mode entry */
 	HAL_ResumeTick();
+}
+
+
+void awakeFromSleep(void) {
+
+	// turn on LD1, LD2
+	BSP_LED_On(LED2_PIN); // LD1 orange turns off
+	HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET); // LD2 green turns on
+	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
+
+	// turn on lcd
+	BSP_LCD_DisplayOn();
+	dimmed_screen = false;
+	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
+
+	// turn on laser and test point
+	HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_SET); // laser
+	HAL_GPIO_WritePin(ARD_D7_GPIO_Port, ARD_D7_Pin, GPIO_PIN_SET); // test point: timer frequency
+	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
+
+	// turn on ts
+	BSP_TS_ITConfig();
+	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
+
+	// turn on BT pwr transistor
+	HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_SET);
+	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
+
+	// set flags
+	BT_ENABLED = true;
+	ENTER_SLEEP_MODE = false;
+	SLEEP_MODE_ACTIVE = false;
+
+}
+
+
+void enterSleep(void) {
+
+	// turn off ts
+	BSP_TS_ITDeConfig();
+
+	// turn off lcd
+	BSP_LCD_Clear(LCD_COLOR_WHITE);
+	if(dimmed_screen == true) {
+		BSP_LCD_ScreenDimmingOff();
+	}
+	BSP_LCD_ScreenDimmingConfig(100, 0, 5, 20);
+	BSP_LCD_ScreenDimmingOn();
+	BSP_LCD_DisplayOff();
+	dimmed_screen = true;
+	HAL_Delay(1000); // wait for fade to finish
+	HAL_GPIO_WritePin(LCD_BL_CTRL_GPIO_PORT, LCD_BL_CTRL_PIN, GPIO_PIN_RESET); // force the backlight off
+
+	// turn off BT pwr transistor
+	HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_RESET);
+	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
+
+	// turn off LD1, LD2
+	BSP_LED_Off(LED2_PIN); // LD1 orange turns off
+	HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_SET); // LD2 green turns off
+	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
+
+	// turn off laser and test point
+	HAL_GPIO_WritePin(ARD_D4_GPIO_Port, ARD_D4_Pin, GPIO_PIN_RESET); // laser
+	HAL_GPIO_WritePin(ARD_D7_GPIO_Port, ARD_D7_Pin, GPIO_PIN_RESET); // test point: timer frequency
+	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
+
+	// set flags
+	BT_ENABLED = false;
+	ENTER_SLEEP_MODE = false;
+	SLEEP_MODE_ACTIVE = true;
+
 }
 
 
@@ -959,123 +915,29 @@ void awakeFromSleep(void) {
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 
+	// DOWN: enter sleep mode
+	// LEFT: wake up (event)
+	// RIGHT: toggle bt enabled
+
 	if(GPIO_Pin == JOY_DOWN_Pin) {
-//		gone_sleep = true;
-//		HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_HIGH); // JOY_SEL on SYS_WKUP2
-//		prepareForSleep();
-//		enterSleep();
-
-		// simpler version
-		enter_sleep_mode = true;
+		// set flag to enter sleep mode
+		ENTER_SLEEP_MODE = true;
 	}
-
-	// LEFT wakes it up as an event
 
 	if(GPIO_Pin == JOY_RIGHT_Pin) {
-//		awakeFromSleep();
 
-		// simpler version
-		HAL_ResumeTick();
+		if(BT_ENABLED) {
+			HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_RESET); // turn off BT pwr transistor
+		} else {
+			HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_SET); // turn on BT pwr transistor
+		}
+
+		BT_ENABLED = !BT_ENABLED;
+
 	}
 
 }
 
-/**
-  * @brief  System Power Configuration
-  *         The system Power is configured as follow :
-  *            + System Running at MSI (~100 KHz)
-  *            + Flash 0 wait state
-  *            + Code running from Internal FLASH
-  *            + Wakeup using EXTI Line (User push-button PC.13)
-  * @param  None
-  * @retval None
-  */
-void SystemPower_Config(void)
-{
-  GPIO_InitTypeDef GPIO_InitStructure;
-
-      /* Set all GPIO in analog state to reduce power consumption */
-    __HAL_RCC_GPIOA_CLK_ENABLE();
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-    __HAL_RCC_GPIOD_CLK_ENABLE();
-    __HAL_RCC_GPIOE_CLK_ENABLE();
-    __HAL_RCC_GPIOF_CLK_ENABLE();
-    __HAL_RCC_GPIOG_CLK_ENABLE();
-    __HAL_RCC_GPIOH_CLK_ENABLE();
-    __HAL_RCC_GPIOI_CLK_ENABLE();
-
-    GPIO_InitStructure.Mode = GPIO_MODE_ANALOG;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStructure.Pull = GPIO_NOPULL;
-    GPIO_InitStructure.Pin = GPIO_PIN_All;
-
-    HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStructure);
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
-    HAL_GPIO_Init(GPIOD, &GPIO_InitStructure);
-    HAL_GPIO_Init(GPIOE, &GPIO_InitStructure);
-    HAL_GPIO_Init(GPIOF, &GPIO_InitStructure);
-    HAL_GPIO_Init(GPIOG, &GPIO_InitStructure);
-    HAL_GPIO_Init(GPIOH, &GPIO_InitStructure);
-    HAL_GPIO_Init(GPIOI, &GPIO_InitStructure);
-
-    __HAL_RCC_GPIOA_CLK_DISABLE();
-    __HAL_RCC_GPIOB_CLK_DISABLE();
-    __HAL_RCC_GPIOC_CLK_DISABLE();
-    __HAL_RCC_GPIOD_CLK_DISABLE();
-    __HAL_RCC_GPIOE_CLK_DISABLE();
-    __HAL_RCC_GPIOF_CLK_DISABLE();
-    __HAL_RCC_GPIOG_CLK_DISABLE();
-    __HAL_RCC_GPIOH_CLK_DISABLE();
-    __HAL_RCC_GPIOI_CLK_DISABLE();
-
-}
-
-/**
-  * @brief  System Clock Speed decrease
-  *         The system Clock source is shifted from HSI to MSI
-  *         while at the same time, MSI range is set to RCC_MSIRANGE_0
-  *         to go down to 100 KHz
-  * @param  None
-  * @retval None
-  */
-void SystemClock_Decrease(void)
-{
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-
-  /* MSI is enabled after System reset, activate PLL with MSI as source */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-  RCC_OscInitStruct.HSEState = RCC_HSE_OFF;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_0;
-  RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-  if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler();
-  }
-
-  /* Select MSI as system clock source and configure the HCLK, PCLK1 and PCLK2
-     clocks dividers */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-  if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-  {
-    /* Initialization Error */
-    Error_Handler();
-  }
-
-  /* Disable HSI to reduce power consumption since MSI is used from that point */
-  __HAL_RCC_HSI_DISABLE();
-
-}
 
 /**
   * @brief SYSTICK callback
