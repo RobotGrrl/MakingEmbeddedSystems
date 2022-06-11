@@ -76,7 +76,7 @@ TS_StateTypeDef ts_result;
 bool flip = false;
 bool circle_selected = false;
 uint32_t last_ts;
-bool dimmed_screen = false;
+bool DIMMED_SCREEN = false;
 
 bool led_on = false;
 bool SLEEP_MODE_ACTIVE = false;
@@ -130,6 +130,24 @@ float raw_mm;
 uint8_t buf[12];
 
 
+// UI234
+
+struct Bubble {
+   uint16_t x;
+   uint16_t y;
+   uint16_t radius;
+   uint16_t hit_diameter;
+   bool selected;
+   uint16_t colour_active;
+   uint16_t colour_inactive;
+   bool redraw;
+   uint8_t type;
+   uint32_t last_selected;
+};
+uint8_t num_bubbles = 4;
+struct Bubble ui_bubbles[4];
+bool bubble_label_redraw = true;
+
 
 /* USER CODE END PV */
 
@@ -143,6 +161,12 @@ void ResetAndDetectSensor(int SetDisplay); // TODO: add this function
 void reconfigureFromSleep(void);
 void awakeFromSleep(void);
 void enterSleep(void);
+
+// ui related
+void uiSetup(void);
+void drawBubble(struct Bubble *bubble);
+void deselectBubbles(uint8_t skip);
+
 
 /* USER CODE END PFP */
 
@@ -324,18 +348,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 }
 
-void drawCircle(uint16_t x, uint16_t y) {
-
-	if(!circle_selected) {
-		BSP_LCD_SetTextColor( LCD_COLOR_DARKMAGENTA );
-		BSP_LCD_FillCircle(x, y, 20);
-	} else {
-		BSP_LCD_SetTextColor( LCD_COLOR_GREEN );
-		BSP_LCD_FillCircle(x, y, 40);
-	}
-
-}
-
 /* USER CODE END 0 */
 
 /**
@@ -399,13 +411,11 @@ int main(void)
 		Error_Handler();
 	}
 
+
 	// the lcd bsp includes the fontNN.c files in the Utilities directory
 	// in that file, a struct is declared: FontNN
-	//BSP_LCD_SetFont(&Font20);
-	BSP_LCD_SetFont(&Font24);
-
-	// the display is 240 px tall, XYZ px wide
-	BSP_LCD_DisplayStringAt(0, 240 - 65, (uint8_t *)"Purple Ball", CENTER_MODE);
+	//BSP_LCD_SetFont(&Font24);
+	//BSP_LCD_DisplayStringAt(0, 240 - 65, (uint8_t *)"Accio Range", CENTER_MODE);
 
 
 
@@ -413,8 +423,6 @@ int main(void)
 	if(BSP_TS_InitEx(BSP_LCD_GetXSize(), BSP_LCD_GetYSize(), LCD_ORIENTATION_LANDSCAPE) != TS_OK) {
 		Error_Handler();
 	}
-
-	BSP_LCD_ScreenDimmingConfig(100, 5, 1, 20);
 
 
 	// LED GPIO
@@ -495,6 +503,8 @@ int main(void)
 	//--
 
 
+	uiSetup();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -506,12 +516,18 @@ int main(void)
   	if(SLEEP_MODE_ACTIVE) {
 			reconfigureFromSleep();
 			awakeFromSleep();
+			// refresh ui
+			for(uint8_t i=0; i<num_bubbles; i++) {
+				struct Bubble *b = &ui_bubbles[i];
+				b->redraw = true;
+			}
+			bubble_label_redraw = true;
 		}
 
   	// flag set from interrupt to enter in to sleep mode
   	if(ENTER_SLEEP_MODE) {
   		enterSleep();
-			HAL_SuspendTick();
+  		HAL_SuspendTick();
 			HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFE); // left button configured as event
   	}
 
@@ -655,70 +671,92 @@ int main(void)
 		// the reset button - because the display will say Beep instead of the
 		// other two possibilities
 		if(TimingDelay == 0) {
-			/* Toggle LED1 */
 			if(led_on) {
 				BSP_LED_On(LED2_PIN); // LD1 orange
-
-				BSP_LCD_Clear(LCD_COLOR_WHITE);
-				BSP_LCD_DisplayStringAt(0, 240 - 65, (uint8_t *)"Zweep", CENTER_MODE);
 			} else {
 				BSP_LED_Off(LED2_PIN); // LD1 orange
-
-				BSP_LCD_Clear(LCD_COLOR_WHITE);
-				BSP_LCD_DisplayStringAt(0, 240 - 65, (uint8_t *)"Fleep", CENTER_MODE);
 			}
 			led_on = !led_on;
 		}
 
 
 
-		// check for last touch
-  	// imagine the case where gettick has overflowed, but last_ts has not
-		// eg 100-30000
-		// abs could be used to prevent this from being a negative number, however
-		// in this case, it is not needed, because two unsigned integers being
-		// subtracted results in an unsigned integer
-		if( HAL_GetTick()-last_ts >= 3000 && dimmed_screen == false) {
-			BSP_LCD_ScreenDimmingConfig(100, 5, 5, 20); // 100-5=95/5=19*20=380ms
-			BSP_LCD_ScreenDimmingOn();
-			dimmed_screen = true;
+
+
+		// update ui
+		for(uint8_t i=0; i<num_bubbles; i++) {
+			drawBubble(&ui_bubbles[i]);
+		}
+		if(bubble_label_redraw) {
+			BSP_LCD_SetTextColor( LCD_COLOR_DARKGREEN );
+			BSP_LCD_SetFont(&Font24);
+			BSP_LCD_DisplayStringAt(0, 90, (uint8_t *)" 10   30   90", LEFT_MODE);
+			bubble_label_redraw = false;
 		}
 
-
-
-		uint8_t circle_x = 100;
-		uint8_t circle_y = 100;
-		drawCircle(circle_x, circle_y);
-
+		// update ts
 		BSP_TS_GetState(&ts_result);
-
 		uint8_t num_touches = ts_result.touchDetected;
 
-		for(int i=0; i<num_touches; i++) {
+		// wake up the screen on touch
+		if(num_touches > 0 && DIMMED_SCREEN == true) {
+			BSP_LCD_ScreenDimmingOff();
+			DIMMED_SCREEN = false;
+			last_ts = HAL_GetTick();
+		}
+
+		// hit testing selected bubbles
+		for(uint8_t i=0; i<num_touches; i++) {
 			Point touch;
 			touch.X = ts_result.touchX[i];
 			touch.Y = ts_result.touchY[i];
 
-			if(dimmed_screen) {
-				//BSP_LCD_ScreenDimmingConfig(5, 100, 1, 20);
-				//BSP_LCD_ScreenDimmingOn();
-				BSP_LCD_ScreenDimmingOff();
-				dimmed_screen = false;
-			}
+			for(uint8_t j=0; j<num_bubbles; j++) {
+				struct Bubble *b = &ui_bubbles[j];
 
-			last_ts = HAL_GetTick();
+				// hit testing
+				if(touch.X < b->x + b->hit_diameter && touch.X > b->x - b->hit_diameter) {
+					if(touch.Y < b->y + b->hit_diameter && touch.Y > b->y - b->hit_diameter) {
 
-			if(touch.X < circle_x+70 && touch.X > circle_x-70) {
-				if(touch.Y < circle_y+70 && touch.Y > circle_y-70) {
-					circle_selected = !circle_selected;
-					BSP_LCD_Clear(LCD_COLOR_WHITE);
-					break;
-				}
-			}
+						if(b->type == 1) { // ui bubbles
 
-			BSP_LCD_SetTextColor( LCD_COLOR_BLUE );
-			BSP_LCD_FillCircle(touch.X, touch.Y, 10);
+							if(!b->selected) { // not selected prior
+								b->selected = !b->selected;
+								deselectBubbles(j); // "single touch"
+								b->redraw = true;
+								b->last_selected = HAL_GetTick();
+							}
 
+						} else if(b->type == 2) { // go bubble
+
+							if(HAL_GetTick()-b->last_selected > 80) { // 80 ms debounce
+								b->selected = !b->selected;
+								b->redraw = true;
+								b->last_selected = HAL_GetTick();
+							}
+
+						}
+
+					}
+				} // hit testing end
+
+			} // bubble loop end
+
+		} // touches end
+
+
+
+		// check for last touch
+		// imagine the case where gettick has overflowed, but last_ts has not
+		// eg 100-30000
+		// abs could be used to prevent this from being a negative number, however
+		// in this case, it is not needed, because two unsigned integers being
+		// subtracted results in an unsigned integer
+		if( HAL_GetTick()-last_ts >= 5000 && DIMMED_SCREEN == false) {
+			//BSP_LCD_ScreenDimmingConfig(100, 5, 5, 20); // 100-5=95/5=19*20=380ms
+			BSP_LCD_ScreenDimmingConfig(100, 5, 5, 1); // 100-5=95/5=19*20=380ms
+			BSP_LCD_ScreenDimmingOn();
+			DIMMED_SCREEN = true;
 		}
 
     /* USER CODE END WHILE */
@@ -820,6 +858,101 @@ void PeriphCommonClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+
+// UI123
+
+void drawBubble(struct Bubble *bubble) {
+
+	if(!bubble->redraw) return;
+
+	if(!bubble->selected) {
+		BSP_LCD_SetTextColor( bubble->colour_active );
+		BSP_LCD_FillCircle(bubble->x, bubble->y, bubble->radius);
+	} else {
+		BSP_LCD_SetTextColor( bubble->colour_inactive );
+		BSP_LCD_FillCircle(bubble->x, bubble->y, bubble->radius);
+	}
+
+	bubble->redraw = false;
+
+}
+
+void deselectBubbles(uint8_t skip) {
+
+	for(uint8_t i=0; i<num_bubbles; i++) {
+		struct Bubble *b = &ui_bubbles[i];
+		if(b->type == 1) { // ui bubbles
+			if(i == skip) continue;
+			b->selected = false;
+			b->redraw = true;
+		}
+	}
+
+}
+
+void uiSetup(void) {
+
+	uint16_t radius = 30;
+	uint16_t hit_diameter = 35;
+	uint16_t y = 50;
+
+	// left bubble
+	ui_bubbles[0].x = 40;
+	ui_bubbles[0].y = y;
+	ui_bubbles[0].radius = radius;
+	ui_bubbles[0].hit_diameter = hit_diameter;
+	ui_bubbles[0].selected = true;
+	ui_bubbles[0].colour_active = LCD_COLOR_CYAN;
+	ui_bubbles[0].colour_inactive = LCD_COLOR_GREEN;
+	ui_bubbles[0].redraw = true;
+	ui_bubbles[0].type = 1;
+	ui_bubbles[0].last_selected = 0;
+
+	// middle bubble
+	ui_bubbles[1].x = 120;
+	ui_bubbles[1].y = y;
+	ui_bubbles[1].radius = radius;
+	ui_bubbles[1].hit_diameter = hit_diameter;
+	ui_bubbles[1].selected = false;
+	ui_bubbles[1].colour_active = LCD_COLOR_LIGHTBLUE;
+	ui_bubbles[1].colour_inactive = LCD_COLOR_GREEN;
+	ui_bubbles[1].redraw = true;
+	ui_bubbles[1].type = 1;
+	ui_bubbles[1].last_selected = 0;
+
+	// right bubble
+	ui_bubbles[2].x = 200;
+	ui_bubbles[2].y = y;
+	ui_bubbles[2].radius = radius;
+	ui_bubbles[2].hit_diameter = hit_diameter;
+	ui_bubbles[2].selected = false;
+	ui_bubbles[2].colour_active = LCD_COLOR_LIGHTMAGENTA;
+	ui_bubbles[2].colour_inactive = LCD_COLOR_GREEN;
+	ui_bubbles[2].redraw = true;
+	ui_bubbles[2].type = 1;
+	ui_bubbles[2].last_selected = 0;
+
+	// go bubble
+	ui_bubbles[3].x = 120;
+	ui_bubbles[3].y = 170;
+	ui_bubbles[3].radius = 45;
+	ui_bubbles[3].hit_diameter = 50;
+	ui_bubbles[3].selected = true;
+	ui_bubbles[3].colour_active = LCD_COLOR_GREEN;
+	ui_bubbles[3].colour_inactive = LCD_COLOR_BLUE;
+	ui_bubbles[3].redraw = true;
+	ui_bubbles[3].type = 2;
+	ui_bubbles[3].last_selected = 0;
+
+}
+
+
+
+
+
+
+
+
 void reconfigureFromSleep(void) {
 	/* System is Low Power Run mode when exiting Low Power Sleep mode,
 		 disable low power run mode and reset the clock to initialization configuration */
@@ -848,7 +981,7 @@ void awakeFromSleep(void) {
 
 	// turn on lcd
 	BSP_LCD_DisplayOn();
-	dimmed_screen = false;
+	DIMMED_SCREEN = false;
 	if(PWR_ANALYSIS) HAL_Delay(PWR_ANALYSIS_DELAY);
 
 	// turn on laser and test point
@@ -879,13 +1012,13 @@ void enterSleep(void) {
 
 	// turn off lcd
 	BSP_LCD_Clear(LCD_COLOR_WHITE);
-	if(dimmed_screen == true) {
+	if(DIMMED_SCREEN == true) {
 		BSP_LCD_ScreenDimmingOff();
 	}
 	BSP_LCD_ScreenDimmingConfig(100, 0, 5, 20);
 	BSP_LCD_ScreenDimmingOn();
 	BSP_LCD_DisplayOff();
-	dimmed_screen = true;
+	DIMMED_SCREEN = true;
 	HAL_Delay(1000); // wait for fade to finish
 	HAL_GPIO_WritePin(LCD_BL_CTRL_GPIO_PORT, LCD_BL_CTRL_PIN, GPIO_PIN_RESET); // force the backlight off
 
@@ -947,21 +1080,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 void HAL_SYSTICK_Callback(void)
 {
   //HAL_IncTick(); // it's already incremented in _it.c
-  if (TimingDelay != 0)
-  {
+  if (TimingDelay != 0) {
     TimingDelay--;
-  }
-  else
-  {
-    // don't do this, it results in a usagefault
-  	/* Toggle LED1 */
-    //BSP_LED_Toggle(LED1); // results in a usagefault
-//  	if(led_on) {
-//  		BSP_LED_Off(LED1);
-//  	} else {
-//  		BSP_LED_On(LED1);
-//  	}
-//  	led_on = !led_on;
+  } else {
     TimingDelay = LED_TOGGLE_DELAY;
   }
 }
