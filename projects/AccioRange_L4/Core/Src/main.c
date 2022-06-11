@@ -49,11 +49,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define TIMED_RANGING_PERIOD    50    // in ms
-#define LED_TOGGLE_DELAY        100
-#define PWR_ANALYSIS 						1
-#define PWR_ANALYSIS_DELAY			1000
+#define TIMED_RANGING_PERIOD    40    // sensor sampling period in ms
+#define LED_TOGGLE_DELAY        100   // heartbeat led
+#define PWR_ANALYSIS 						1     // set to 1 to have longer delays when powering down peripherals
+#define PWR_ANALYSIS_DELAY			1000  // duration of delay
 #define RANGER_SAMPLE_RATE      20    // samples per second
+#define PROFILING_TIM           0     // set to 1 to trigger test point whenever timer interrupt fires
+#define PROFILING_SAMPLES       1     // set to 1 to trigger test point during processing of samples
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,6 +70,7 @@
 // touch screen related
 TS_StateTypeDef ts_result;
 uint32_t last_ts;
+char buf[20];
 
 // states related
 bool SAMPLE_SENSOR = false;
@@ -75,30 +78,11 @@ bool DIMMED_SCREEN = false;
 bool SLEEP_MODE_ACTIVE = false;
 bool ENTER_SLEEP_MODE = false;
 bool BT_ENABLED = true;
+bool SEND_ENABLED = true;
 
 // led related
 bool led_on = false;
 static uint32_t TimingDelay;
-
-// sampling related
-uint16_t range;
-uint16_t range_mm;
-
-uint32_t range_mm_sum = 0;
-uint8_t sum_count = 0;
-uint8_t sum_skip = 0;
-float range_mm_avg = 0.0;
-unsigned long last_sample = 0;
-
-float all_samples[120];
-uint16_t num_samples = 30;
-uint16_t sample_index = 0;
-
-uint16_t raw;
-float raw_in;
-float raw_mm;
-uint8_t buf[12];
-
 
 // ui related // UI234
 struct Bubble {
@@ -135,8 +119,6 @@ uint8_t isApertureSpads;
 
 
 // sampling related
-// RAN_
-
 struct Ranger {
 	uint16_t max;
 	uint16_t min;
@@ -190,7 +172,6 @@ void deselectBubbles(uint8_t skip);
 
 // tof related
 void tofTestRegisterRead(void);
-void tofInit(void);
 
 /* USER CODE END PFP */
 
@@ -212,7 +193,7 @@ void HandleError(int err){
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 	if(htim == &htim6) {
-		HAL_GPIO_TogglePin(ARD_D7_GPIO_Port, ARD_D7_Pin); // test point for profiling
+		if(PROFILING_TIM) HAL_GPIO_TogglePin(ARD_D7_GPIO_Port, ARD_D7_Pin); // test point for profiling
 		SAMPLE_SENSOR = true;
 	}
 
@@ -296,7 +277,6 @@ int main(void)
 	VL53L0X_Dev_t *pDev;
 	pDev = &VL53L0XDev;
 	tofTestRegisterRead();
-	//tofInit();
 
 	pDev->I2cDevAddr = 0x52;
 	pDev->Present = 0;
@@ -361,7 +341,7 @@ int main(void)
   while (1)
   {
 
-  	// wake from event, the first thing seen after exiting sleep mode
+  	// wake from event, the first state seen after exiting sleep mode
   	if(SLEEP_MODE_ACTIVE) {
 			reconfigureFromSleep();
 			awakeFromSleep();
@@ -374,7 +354,7 @@ int main(void)
 		}
 
 
-  	// flag set from interrupt to enter in to sleep mode
+  	// flag set from button interrupt to enter in to sleep mode
   	if(ENTER_SLEEP_MODE) {
   		enterSleep();
   		HAL_SuspendTick();
@@ -382,12 +362,12 @@ int main(void)
   	}
 
 
-
-
   	// processing the sensor data
   	// sampling every 50 ms
   	// flag set from timer
   	if(SAMPLE_SENSOR) {
+
+  		if(PROFILING_SAMPLES) HAL_GPIO_WritePin(ARD_D7_GPIO_Port, ARD_D7_Pin, GPIO_PIN_SET); // test point for profiling
 
   		// get sonar adc value
 			// "10-bit ADC, divide the ADC output by 2 for the range in inches."
@@ -400,8 +380,7 @@ int main(void)
 			VL53L0X_GetRangingMeasurementData(pDev, &RangingMeasurementData);
 			rangers[1].raw_mm = RangingMeasurementData.RangeMilliMeter; // mm
 
-			// RAN_
-
+			// go through each of the rangers
 			for(uint8_t i=0; i<num_rangers; i++) {
 				struct Ranger *r = &rangers[i];
 
@@ -449,6 +428,8 @@ int main(void)
 					tof_mm_avg = r->mm_avg;
 				}
 
+				if(PROFILING_SAMPLES) HAL_GPIO_WritePin(ARD_D7_GPIO_Port, ARD_D7_Pin, GPIO_PIN_RESET); // test point for profiling
+
 			} // end of rangers loop
 
 			// hope all of this takes < 50 ms
@@ -457,11 +438,7 @@ int main(void)
   	}
 
 
-
-
-
-
-  	// process the records
+  	// next, process the records from the data
   	bool ready_to_process = false;
   	uint8_t ready_count = 0;
   	for(uint8_t i=0; i<num_rangers; i++) {
@@ -500,10 +477,12 @@ int main(void)
   	}
 
 
+  	// send the resulting distance over bt to our app
+  	// UPDATE_RESULT refers to the data processing
+  	// SEND_ENABLED refers to the big button on the screen
+  	if(UPDATE_RESULT == true && SEND_ENABLED == true) {
 
-
-  	// send the result distance over bt to our app
-  	if(UPDATE_RESULT) {
+  		HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_RESET); // LD2 green turns on
 
 			// this should already be on, but let's do it again just in case...
 			// turn on BT pwr transistor
@@ -517,14 +496,10 @@ int main(void)
 			}
 			HAL_UART_Transmit(&huart1, buf, strlen((char*)buf), HAL_MAX_DELAY);
 
-  		// update lcd
-			// TODO
+			HAL_GPIO_WritePin(LED2_GPIO_PORT, LED2_PIN, GPIO_PIN_SET); // LD2 green turns off
 
   		UPDATE_RESULT = false;
   	}
-
-
-
 
 
 		// update ui
@@ -588,6 +563,8 @@ int main(void)
 								b->selected = !b->selected;
 								b->redraw = true;
 								b->last_selected = HAL_GetTick();
+
+								SEND_ENABLED = b->selected;
 							}
 
 						}
@@ -623,7 +600,6 @@ int main(void)
 			}
 			led_on = !led_on;
 		}
-
 
     /* USER CODE END WHILE */
 
@@ -734,45 +710,17 @@ void tofTestRegisterRead(void) {
 	}
 }
 
-void tofInit(void) {
-	/*
-	pDev->I2cDevAddr = 0x52;
-	pDev->Present = 0;
 
-	int status = VL53L0X_DataInit(pDev);
-	if(status == 0) {
-			pDev->Present = 1;
-	} else {
-			printf("VL53L0X_DataInit fail\n");
-			return;
-	}
-	printf("VL53L0X %d Present and initiated to final 0x%x\n", pDev->Id, pDev->I2cDevAddr);
-	pDev->Present = 1;
-
-	// Initialize the device in continuous ranging mode
-	VL53L0X_StaticInit(pDev);
-	VL53L0X_PerformRefCalibration(pDev, &VhvSettings, &PhaseCal);
-	VL53L0X_PerformRefSpadManagement(pDev, &refSpadCount, &isApertureSpads);
-	VL53L0X_SetInterMeasurementPeriodMilliSeconds(pDev, TIMED_RANGING_PERIOD);
-	VL53L0X_SetDeviceMode(pDev, VL53L0X_DEVICEMODE_CONTINUOUS_TIMED_RANGING);
-	VL53L0X_StartMeasurement(pDev);
-	*/
-}
-
-
-
-
-// UI123
 
 void drawBubble(struct Bubble *bubble) {
 
 	if(!bubble->redraw) return;
 
 	if(!bubble->selected) {
-		BSP_LCD_SetTextColor( bubble->colour_active );
+		BSP_LCD_SetTextColor( bubble->colour_inactive );
 		BSP_LCD_FillCircle(bubble->x, bubble->y, bubble->radius);
 	} else {
-		BSP_LCD_SetTextColor( bubble->colour_inactive );
+		BSP_LCD_SetTextColor( bubble->colour_active );
 		BSP_LCD_FillCircle(bubble->x, bubble->y, bubble->radius);
 	}
 
@@ -805,8 +753,8 @@ void uiSetup(void) {
 	ui_bubbles[0].radius = radius;
 	ui_bubbles[0].hit_diameter = hit_diameter;
 	ui_bubbles[0].selected = false;
-	ui_bubbles[0].colour_active = LCD_COLOR_CYAN;
-	ui_bubbles[0].colour_inactive = LCD_COLOR_GREEN;
+	ui_bubbles[0].colour_active = LCD_COLOR_GREEN;
+	ui_bubbles[0].colour_inactive = LCD_COLOR_CYAN;
 	ui_bubbles[0].redraw = true;
 	ui_bubbles[0].type = 1;
 	ui_bubbles[0].last_selected = 0;
@@ -817,8 +765,8 @@ void uiSetup(void) {
 	ui_bubbles[1].radius = radius;
 	ui_bubbles[1].hit_diameter = hit_diameter;
 	ui_bubbles[1].selected = true;
-	ui_bubbles[1].colour_active = LCD_COLOR_LIGHTBLUE;
-	ui_bubbles[1].colour_inactive = LCD_COLOR_GREEN;
+	ui_bubbles[1].colour_active = LCD_COLOR_GREEN;
+	ui_bubbles[1].colour_inactive = LCD_COLOR_LIGHTBLUE;
 	ui_bubbles[1].redraw = true;
 	ui_bubbles[1].type = 1;
 	ui_bubbles[1].last_selected = 0;
@@ -829,8 +777,8 @@ void uiSetup(void) {
 	ui_bubbles[2].radius = radius;
 	ui_bubbles[2].hit_diameter = hit_diameter;
 	ui_bubbles[2].selected = false;
-	ui_bubbles[2].colour_active = LCD_COLOR_LIGHTMAGENTA;
-	ui_bubbles[2].colour_inactive = LCD_COLOR_GREEN;
+	ui_bubbles[2].colour_active = LCD_COLOR_GREEN;
+	ui_bubbles[2].colour_inactive = LCD_COLOR_LIGHTMAGENTA;
 	ui_bubbles[2].redraw = true;
 	ui_bubbles[2].type = 1;
 	ui_bubbles[2].last_selected = 0;
