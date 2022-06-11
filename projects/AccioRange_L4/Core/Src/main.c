@@ -135,10 +135,6 @@ uint8_t isApertureSpads;
 
 
 // sampling related
-uint16_t sonar_raw = 0;
-float sonar_raw_mm = 0;
-uint16_t tof_raw_mm = 0;
-
 // RAN_
 
 struct Ranger {
@@ -164,11 +160,16 @@ struct Ranger {
 uint8_t num_rangers = 2;
 struct Ranger rangers[2];
 
-uint16_t NUM_RECORDS = 10;
+uint16_t NUM_RECORDS = 5;
 uint16_t MAX_RECORDS = 300; // =5mins*60seconds
 
 float sonar_mm_avg = 0.0;
 float tof_mm_avg = 0.0;
+
+float result_distance = 0.0;
+bool UPDATE_RESULT = false;
+float alpha = 0.75; // weight of tof
+
 
 /* USER CODE END PV */
 
@@ -338,9 +339,9 @@ int main(void)
 		r->record_sum = 0.0;
 		r->val = 0.0;
 	}
-	rangers[0].max = 1200; // mm sonar
-	rangers[0].min = 200;
-	rangers[1].max = 400; // mm tof
+	rangers[0].max = 3000; // mm sonar
+	rangers[0].min = 150;
+	rangers[1].max = 500; // mm tof
 	rangers[1].min = 10;
 
 
@@ -456,50 +457,61 @@ int main(void)
   	}
 
 
+
+
+
+
   	// process the records
+  	bool ready_to_process = false;
+  	uint8_t ready_count = 0;
   	for(uint8_t i=0; i<num_rangers; i++) {
   		struct Ranger *r = &rangers[i];
-
-  		// TODO
-
-  	}
-
-
-  	/*
-  	if(sonar_process_samples == true && tof_process_samples == true) {
-
-  		// take an average of all the samples
-  		uint16_t sonar_sample_sum;
-  		float sonar_sample_avg;
-  		for(uint8_t i=0; i<sonar_sample_index; i++) {
-  			sonar_sample_sum += sonar_samples[i];
+  		if(r->process_records == true) {
+  			ready_count++;
   		}
-  		sonar_sample_avg = (float)sonar_sample_sum/(float)sonar_sample_index;
+  	}
+  	if(ready_count == num_rangers) {
+  		ready_to_process = true;
+  	}
+  	if(ready_to_process) {
 
-  		// take an average of all the samples
-			uint16_t tof_sample_sum;
-			float tof_sample_avg;
-			for(uint8_t i=0; i<tof_sample_index; i++) {
-				tof_sample_sum += tof_samples[i];
+  		for(uint8_t i=0; i<num_rangers; i++) {
+				struct Ranger *r = &rangers[i];
+
+				for(uint16_t j=0; j<r->record_index; j++) {
+					r->record_sum += r->records[j];
+				}
+
+				// record average
+				r->val = r->record_sum/r->record_index;
+
+				// reset counters
+				r->record_index = 0;
+				r->record_sum = 0.0;
+
+				// reset this flag
+				r->process_records = false;
 			}
-			tof_sample_avg = (float)tof_sample_sum/(float)tof_sample_index;
 
-			alpha = 0.75; // TODO: move to top
-			result_distance = (alpha*tof_sample_avg) + ( (1-alpha)*sonar_sample_avg);
+  		// hooray! we have the value!
+  		result_distance = (alpha*rangers[1].val) + ( (1-alpha)*rangers[0].val);
+  		UPDATE_RESULT = true;
 
-			update_result = true;
   	}
 
 
-  	if(update_result) {
+
+
+  	// send the result distance over bt to our app
+  	if(UPDATE_RESULT) {
 
 			// this should already be on, but let's do it again just in case...
 			// turn on BT pwr transistor
   		HAL_GPIO_WritePin(ARD_D2_GPIO_Port, ARD_D2_Pin, GPIO_PIN_SET);
 
   		// send to uart
-  		if(result_distance > 0) { // sonar stop at 1.2 m (self-imposed limit)
-				sprintf((char*)buf, "%d;", (int)result_distance);
+  		if(result_distance > 0) {
+				sprintf((char*)buf, "%d;", (uint16_t)result_distance);
 			} else {
 				sprintf((char*)buf, "%d;", -1);
 			}
@@ -508,9 +520,8 @@ int main(void)
   		// update lcd
 			// TODO
 
-  		update_result = false;
+  		UPDATE_RESULT = false;
   	}
-  	*/
 
 
 
@@ -523,7 +534,8 @@ int main(void)
 		if(bubble_label_redraw) {
 			BSP_LCD_SetTextColor( LCD_COLOR_DARKGREEN );
 			BSP_LCD_SetFont(&Font24);
-			BSP_LCD_DisplayStringAt(0, 90, (uint8_t *)" 10   30   90", LEFT_MODE);
+			//BSP_LCD_DisplayStringAt(0, 90, (uint8_t *)" 10   30   90", LEFT_MODE);
+			BSP_LCD_DisplayStringAt(0, 90, (uint8_t *)" 2   5   10", LEFT_MODE);
 			bubble_label_redraw = false;
 		}
 
@@ -558,6 +570,16 @@ int main(void)
 								deselectBubbles(j); // "single touch"
 								b->redraw = true;
 								b->last_selected = HAL_GetTick();
+
+								// update the number of records
+								if(j==0) {
+									NUM_RECORDS = 2;
+								} else if(j==1) {
+									NUM_RECORDS = 5;
+								} else if(j==2) {
+									NUM_RECORDS = 10;
+								}
+
 							}
 
 						} else if(b->type == 2) { // go bubble
@@ -782,7 +804,7 @@ void uiSetup(void) {
 	ui_bubbles[0].y = y;
 	ui_bubbles[0].radius = radius;
 	ui_bubbles[0].hit_diameter = hit_diameter;
-	ui_bubbles[0].selected = true;
+	ui_bubbles[0].selected = false;
 	ui_bubbles[0].colour_active = LCD_COLOR_CYAN;
 	ui_bubbles[0].colour_inactive = LCD_COLOR_GREEN;
 	ui_bubbles[0].redraw = true;
@@ -794,7 +816,7 @@ void uiSetup(void) {
 	ui_bubbles[1].y = y;
 	ui_bubbles[1].radius = radius;
 	ui_bubbles[1].hit_diameter = hit_diameter;
-	ui_bubbles[1].selected = false;
+	ui_bubbles[1].selected = true;
 	ui_bubbles[1].colour_active = LCD_COLOR_LIGHTBLUE;
 	ui_bubbles[1].colour_inactive = LCD_COLOR_GREEN;
 	ui_bubbles[1].redraw = true;
