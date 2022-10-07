@@ -50,6 +50,8 @@ input_buf uart_buf;
 char c;
 bool echo;
 char buf[20];
+extern char mReceiveBuffer[256]; // should be CONSOLE_COMMAND_MAX_LENGTH, but it's in consoleCommands.h
+extern uint32_t mReceivedSoFar;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -119,9 +121,17 @@ int main(void)
   	}
 
   	if(input_buf_ready(&uart_buf)) {
+  		sprintf((char*)buf, "\r\n", c);
+  		HAL_UART_Transmit(&huart2, buf, 2, HAL_MAX_DELAY);
 			ConsoleProcess();
 			input_buf_reset(&uart_buf);
+			// unsure why console.c doesn't clear, so let's clear it here
+			for(uint16_t i=0; i<256; i++) { // should be CONSOLE_COMMAND_MAX_LENGTH, but it's in consoleCommands.h
+				mReceiveBuffer[i] = 0;
+			}
+			mReceivedSoFar = 0;
 		}
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
